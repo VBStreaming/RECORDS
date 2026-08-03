@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -17,15 +18,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
 
-SUBJECT_CODES = (
-    "KOREAN",
-    "ENGLISH",
-    "MATH",
-    "SOCIAL_STUDIES",
-    "SCIENCE",
-    "HISTORY",
-    "ETC",
-)
+class SubjectCode(StrEnum):
+    KOREAN = "KOREAN"
+    ENGLISH = "ENGLISH"
+    MATH = "MATH"
+    SOCIAL_STUDIES = "SOCIAL_STUDIES"
+    SCIENCE = "SCIENCE"
+    HISTORY = "HISTORY"
+    ETC = "ETC"
 
 
 class User(Base):

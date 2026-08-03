@@ -1,11 +1,13 @@
 from fastapi import FastAPI, Response
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.assignments import router as assignments_router
 from app.auth import router as auth_router
 from app.db import check_database
 
 app = FastAPI(title="RECORDS API")
 app.include_router(auth_router)
+app.include_router(assignments_router)
 
 
 @app.get("/health/live", tags=["health"])
