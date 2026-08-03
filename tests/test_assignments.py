@@ -268,3 +268,113 @@ def test_assignment_detail_hides_other_users_assignment(client: TestClient) -> N
     assert owner_response.status_code == 200
     assert other_response.status_code == 404
     assert other_response.json()["detail"]["code"] == "ASSIGNMENT_NOT_FOUND"
+
+
+def test_update_assignment_changes_only_supplied_fields(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, _ = _signup_and_login(client)
+    created = _create_via_api(client, headers)
+    update_time = datetime(2026, 8, 5, 3, tzinfo=timezone.utc)
+    monkeypatch.setattr(assignment_module, "_now_utc", lambda: update_time)
+
+    response = client.patch(
+        f"/assignments/{created.json()['id']}",
+        json={
+            "title": " 영어 에세이 ",
+            "subject": "ENGLISH",
+            "dueAt": "2026-08-10T23:00:00+09:00",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "영어 에세이"
+    assert response.json()["subject"] == "ENGLISH"
+    assert response.json()["dueAt"] == "2026-08-10T14:00:00Z"
+    assert response.json()["updatedAt"] == "2026-08-05T03:00:00Z"
+    assert response.json()["completed"] is False
+
+
+@pytest.mark.parametrize("payload", [{}, {"title": None}])
+def test_update_assignment_rejects_empty_or_null_fields(
+    client: TestClient,
+    payload: dict,
+) -> None:
+    headers, _ = _signup_and_login(client)
+    created = _create_via_api(client, headers)
+
+    response = client.patch(
+        f"/assignments/{created.json()['id']}",
+        json=payload,
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_completion_is_idempotent_and_can_be_reopened(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, _ = _signup_and_login(client)
+    created = _create_via_api(client, headers)
+    endpoint = f"/assignments/{created.json()['id']}/completion"
+    current_time = datetime(2026, 8, 5, 3, tzinfo=timezone.utc)
+    monkeypatch.setattr(assignment_module, "_now_utc", lambda: current_time)
+
+    completed = client.put(endpoint, json={"completed": True}, headers=headers)
+    assert completed.status_code == 200
+    assert completed.json()["completedAt"] == "2026-08-05T03:00:00Z"
+    assert completed.json()["updatedAt"] == "2026-08-05T03:00:00Z"
+
+    current_time = datetime(2026, 8, 6, 3, tzinfo=timezone.utc)
+    completed_again = client.put(endpoint, json={"completed": True}, headers=headers)
+    assert completed_again.status_code == 200
+    assert completed_again.json()["completedAt"] == completed.json()["completedAt"]
+    assert completed_again.json()["updatedAt"] == completed.json()["updatedAt"]
+
+    current_time = datetime(2026, 8, 7, 3, tzinfo=timezone.utc)
+    reopened = client.put(endpoint, json={"completed": False}, headers=headers)
+    assert reopened.status_code == 200
+    assert reopened.json()["completed"] is False
+    assert reopened.json()["completedAt"] is None
+    assert reopened.json()["updatedAt"] == "2026-08-07T03:00:00Z"
+
+    current_time = datetime(2026, 8, 8, 3, tzinfo=timezone.utc)
+    reopened_again = client.put(endpoint, json={"completed": False}, headers=headers)
+    assert reopened_again.status_code == 200
+    assert reopened_again.json()["updatedAt"] == reopened.json()["updatedAt"]
+
+
+@pytest.mark.parametrize(
+    ("method", "suffix", "payload"),
+    [
+        ("patch", "", {"title": "가로채기"}),
+        ("put", "/completion", {"completed": True}),
+    ],
+)
+def test_update_endpoints_hide_other_users_assignment(
+    client: TestClient,
+    method: str,
+    suffix: str,
+    payload: dict,
+) -> None:
+    owner_headers, _ = _signup_and_login(client)
+    created = _create_via_api(client, owner_headers)
+    other_headers, _ = _signup_and_login(
+        client,
+        email="other-student@example.com",
+        student_number="20311",
+    )
+
+    response = client.request(
+        method,
+        f"/assignments/{created.json()['id']}{suffix}",
+        json=payload,
+        headers=other_headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "ASSIGNMENT_NOT_FOUND"

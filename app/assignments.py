@@ -40,6 +40,33 @@ class AssignmentCreate(BaseModel):
         return value.strip()
 
 
+class AssignmentUpdate(BaseModel):
+    title: Title | None = None
+    subject: SubjectCode | None = None
+    due_at: AwareDatetime | None = Field(default=None, alias="dueAt")
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def normalize_title(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @model_validator(mode="after")
+    def validate_fields(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("at least one field is required")
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("updated fields must not be null")
+        return self
+
+
+class CompletionRequest(BaseModel):
+    completed: bool
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class AssignmentListQuery(BaseModel):
     start: date = Field(alias="from")
     end: date = Field(alias="to")
@@ -209,3 +236,61 @@ def get_assignment(
     db: Session = Depends(get_db),
 ) -> AssignmentResponse:
     return _assignment_response(_owned_assignment(db, assignment_id, user.id))
+
+
+@router.patch(
+    "/assignments/{assignment_id}",
+    response_model=AssignmentResponse,
+    response_model_by_alias=True,
+    tags=["assignments"],
+)
+def update_assignment(
+    assignment_id: UUID,
+    request: AssignmentUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AssignmentResponse:
+    assignment = _owned_assignment(db, assignment_id, user.id)
+    changed = False
+
+    if "title" in request.model_fields_set and assignment.title != request.title:
+        assignment.title = request.title
+        changed = True
+    if "subject" in request.model_fields_set and assignment.subject != request.subject:
+        assignment.subject = request.subject.value
+        changed = True
+    if "due_at" in request.model_fields_set:
+        due_at = request.due_at.astimezone(UTC)
+        if assignment.due_at != due_at:
+            assignment.due_at = due_at
+            changed = True
+
+    now = _now_utc()
+    if changed:
+        assignment.updated_at = now
+        db.commit()
+        db.refresh(assignment)
+    return _assignment_response(assignment, now=now)
+
+
+@router.put(
+    "/assignments/{assignment_id}/completion",
+    response_model=AssignmentResponse,
+    response_model_by_alias=True,
+    tags=["assignments"],
+)
+def set_assignment_completion(
+    assignment_id: UUID,
+    request: CompletionRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AssignmentResponse:
+    assignment = _owned_assignment(db, assignment_id, user.id)
+    now = _now_utc()
+    is_completed = assignment.completed_at is not None
+    if request.completed != is_completed:
+        assignment.completed_at = now if request.completed else None
+        assignment.updated_at = now
+        db.commit()
+        db.refresh(assignment)
+    return _assignment_response(assignment, now=now)
