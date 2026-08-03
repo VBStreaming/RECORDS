@@ -3,7 +3,7 @@ from typing import Annotated, Self
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import (
     AwareDatetime,
     BaseModel,
@@ -13,7 +13,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from sqlalchemy import case, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -94,6 +94,13 @@ class AssignmentResponse(BaseModel):
     deadline_label: str = Field(alias="deadlineLabel")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class DashboardResponse(BaseModel):
+    active_count: int = Field(alias="activeCount")
+    nearest_assignment: AssignmentResponse | None = Field(alias="nearestAssignment")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -294,3 +301,58 @@ def set_assignment_completion(
         db.commit()
         db.refresh(assignment)
     return _assignment_response(assignment, now=now)
+
+
+@router.delete(
+    "/assignments/{assignment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["assignments"],
+)
+def delete_assignment(
+    assignment_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    assignment = _owned_assignment(db, assignment_id, user.id)
+    db.delete(assignment)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/dashboard",
+    response_model=DashboardResponse,
+    response_model_by_alias=True,
+    tags=["assignments"],
+)
+def dashboard(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DashboardResponse:
+    active_conditions = (
+        Assignment.user_id == user.id,
+        Assignment.completed_at.is_(None),
+    )
+    active_count = db.scalar(
+        select(func.count(Assignment.id)).where(*active_conditions)
+    )
+    now = _now_utc()
+    nearest = db.scalar(
+        select(Assignment)
+        .where(*active_conditions, Assignment.due_at < now)
+        .order_by(Assignment.due_at.desc(), Assignment.id.asc())
+        .limit(1)
+    )
+    if nearest is None:
+        nearest = db.scalar(
+            select(Assignment)
+            .where(*active_conditions, Assignment.due_at >= now)
+            .order_by(Assignment.due_at.asc(), Assignment.id.asc())
+            .limit(1)
+        )
+    return DashboardResponse(
+        activeCount=active_count or 0,
+        nearestAssignment=(
+            _assignment_response(nearest, now=now) if nearest is not None else None
+        ),
+    )

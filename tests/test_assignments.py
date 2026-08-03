@@ -378,3 +378,119 @@ def test_update_endpoints_hide_other_users_assignment(
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "ASSIGNMENT_NOT_FOUND"
+
+
+def test_delete_assignment_removes_only_owned_assignment(client: TestClient) -> None:
+    owner_headers, _ = _signup_and_login(client)
+    created = _create_via_api(client, owner_headers)
+    other_headers, _ = _signup_and_login(
+        client,
+        email="other-student@example.com",
+        student_number="20311",
+    )
+    endpoint = f"/assignments/{created.json()['id']}"
+
+    forbidden = client.delete(endpoint, headers=other_headers)
+    owner_can_still_read = client.get(endpoint, headers=owner_headers)
+    deleted = client.delete(endpoint, headers=owner_headers)
+    deleted_again = client.delete(endpoint, headers=owner_headers)
+
+    assert forbidden.status_code == 404
+    assert forbidden.json()["detail"]["code"] == "ASSIGNMENT_NOT_FOUND"
+    assert owner_can_still_read.status_code == 200
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    assert deleted_again.status_code == 404
+
+
+def test_dashboard_is_empty_without_active_assignments(client: TestClient) -> None:
+    headers, _ = _signup_and_login(client)
+
+    response = client.get("/dashboard", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"activeCount": 0, "nearestAssignment": None}
+
+
+def test_dashboard_counts_current_user_and_prefers_recent_overdue(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, _ = _signup_and_login(client)
+    current_time = datetime(2026, 8, 4, 3, tzinfo=timezone.utc)
+    monkeypatch.setattr(assignment_module, "_now_utc", lambda: current_time)
+    _create_via_api(
+        client,
+        headers,
+        title="오래 지난 과제",
+        dueAt="2026-08-01T09:00:00+09:00",
+    )
+    recent_overdue = _create_via_api(
+        client,
+        headers,
+        title="방금 지난 과제",
+        dueAt="2026-08-04T11:00:00+09:00",
+    )
+    _create_via_api(
+        client,
+        headers,
+        title="다가오는 과제",
+        dueAt="2026-08-05T09:00:00+09:00",
+    )
+    completed = _create_via_api(
+        client,
+        headers,
+        title="완료 과제",
+        dueAt="2026-08-06T09:00:00+09:00",
+    )
+    client.put(
+        f"/assignments/{completed.json()['id']}/completion",
+        json={"completed": True},
+        headers=headers,
+    )
+    other_headers, _ = _signup_and_login(
+        client,
+        email="other-student@example.com",
+        student_number="20311",
+    )
+    _create_via_api(
+        client,
+        other_headers,
+        title="다른 사용자 과제",
+        dueAt="2026-08-04T11:30:00+09:00",
+    )
+
+    response = client.get("/dashboard", headers=headers)
+
+    assert recent_overdue.status_code == 201
+    assert response.status_code == 200
+    assert response.json()["activeCount"] == 3
+    assert response.json()["nearestAssignment"]["title"] == "방금 지난 과제"
+    assert response.json()["nearestAssignment"]["deadlineLabel"] == "D-Day"
+
+
+def test_dashboard_uses_earliest_upcoming_when_nothing_is_overdue(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, _ = _signup_and_login(client)
+    current_time = datetime(2026, 8, 4, 3, tzinfo=timezone.utc)
+    monkeypatch.setattr(assignment_module, "_now_utc", lambda: current_time)
+    _create_via_api(
+        client,
+        headers,
+        title="나중 과제",
+        dueAt="2026-08-06T09:00:00+09:00",
+    )
+    _create_via_api(
+        client,
+        headers,
+        title="먼저 과제",
+        dueAt="2026-08-05T09:00:00+09:00",
+    )
+
+    response = client.get("/dashboard", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["activeCount"] == 2
+    assert response.json()["nearestAssignment"]["title"] == "먼저 과제"
