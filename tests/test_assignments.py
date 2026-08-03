@@ -162,18 +162,50 @@ def test_create_assignment_uses_token_owner_and_returns_dday(
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("subject", "ART"), ("dueAt", "2026-08-08T23:00:00")],
+    [
+        ("subject", "ART"),
+        ("dueAt", "2026-08-08T23:00:00"),
+        ("title", 123),
+    ],
 )
 def test_create_assignment_rejects_invalid_input(
     client: TestClient,
     field: str,
-    value: str,
+    value: object,
 ) -> None:
     headers, _ = _signup_and_login(client)
 
     response = _create_via_api(client, headers, **{field: value})
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("due_at", "now", "expected"),
+    [
+        (
+            datetime(2026, 12, 31, 15, tzinfo=timezone.utc),
+            datetime(2026, 12, 31, 14, 59, tzinfo=timezone.utc),
+            (1, "D-1"),
+        ),
+        (
+            datetime(2026, 8, 4, 0, tzinfo=timezone.utc),
+            datetime(2026, 8, 4, 14, tzinfo=timezone.utc),
+            (0, "D-Day"),
+        ),
+        (
+            datetime(2026, 8, 3, 14, tzinfo=timezone.utc),
+            datetime(2026, 8, 4, 0, tzinfo=timezone.utc),
+            (-1, "1일 지남"),
+        ),
+    ],
+)
+def test_deadline_uses_korean_calendar_dates(
+    due_at: datetime,
+    now: datetime,
+    expected: tuple[int, str],
+) -> None:
+    assert assignment_module._deadline(due_at, now) == expected
 
 
 def test_assignment_endpoints_require_authentication(client: TestClient) -> None:
@@ -494,3 +526,53 @@ def test_dashboard_uses_earliest_upcoming_when_nothing_is_overdue(
     assert response.status_code == 200
     assert response.json()["activeCount"] == 2
     assert response.json()["nearestAssignment"]["title"] == "먼저 과제"
+
+
+def test_authenticated_assignment_lifecycle(client: TestClient) -> None:
+    headers, _ = _signup_and_login(client)
+
+    created = _create_via_api(client, headers)
+    assert created.status_code == 201
+    assignment_id = created.json()["id"]
+
+    listed = client.get(
+        "/assignments?from=2026-08-01&to=2026-08-31",
+        headers=headers,
+    )
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()] == [assignment_id]
+
+    updated = client.patch(
+        f"/assignments/{assignment_id}",
+        json={"title": "수학 프린트 제출"},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "수학 프린트 제출"
+
+    completed = client.put(
+        f"/assignments/{assignment_id}/completion",
+        json={"completed": True},
+        headers=headers,
+    )
+    assert completed.status_code == 200
+    assert completed.json()["completed"] is True
+
+    dashboard = client.get("/dashboard", headers=headers)
+    assert dashboard.status_code == 200
+    assert dashboard.json() == {"activeCount": 0, "nearestAssignment": None}
+
+    deleted = client.delete(f"/assignments/{assignment_id}", headers=headers)
+    assert deleted.status_code == 204
+    assert (
+        client.get(f"/assignments/{assignment_id}", headers=headers).status_code == 404
+    )
+
+
+def test_openapi_exposes_assignment_contract(client: TestClient) -> None:
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert set(paths["/assignments"]) == {"get", "post"}
+    assert set(paths["/assignments/{assignment_id}"]) == {"get", "patch", "delete"}
+    assert set(paths["/assignments/{assignment_id}/completion"]) == {"put"}
+    assert set(paths["/dashboard"]) == {"get"}

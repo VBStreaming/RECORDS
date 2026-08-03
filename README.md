@@ -34,6 +34,16 @@ git-ignored `.env` copied from `.env.example`.
 - `GET /health/live` checks that the API process is running.
 - `GET /health/ready` checks that PostgreSQL accepts a query.
 
+## MVP API
+
+- `POST /auth/signup`, `POST /auth/login`, `GET /users/me`
+- `POST /assignments`, `GET /assignments`, `GET /assignments/{assignment_id}`
+- `PATCH /assignments/{assignment_id}`, `PUT /assignments/{assignment_id}/completion`
+- `DELETE /assignments/{assignment_id}`, `GET /dashboard`
+
+Assignment requests require the bearer access token returned by login. See the
+[assignment contract](docs/assignments.md) for request fields and date rules.
+
 ## Common commands
 
 ```bash

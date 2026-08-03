@@ -17,10 +17,10 @@ RECORDS는 FastAPI 단일 백엔드로 시작한다. 현재 구현 범위는 다
 - 개발·검증 절차: [`docs/development-workflow.md`](docs/development-workflow.md)
 - 전체 구현 순서와 Task: [`docs/implementation-roadmap.md`](docs/implementation-roadmap.md)
 - 완료된 인증 계약: [`docs/authentication.md`](docs/authentication.md)
-- 다음 과제 작업의 API·DB 계약: [`docs/assignments.md`](docs/assignments.md)
+- 구현된 과제 API·DB 계약: [`docs/assignments.md`](docs/assignments.md)
 - 로컬 실행 명령: [`README.md`](README.md)
 
-문서와 코드가 다르면 현재 코드와 테스트가 실행 사실의 기준이다. 계획된 과제 동작은 `docs/assignments.md`를 기준으로 구현하고, 계약을 바꿀 때는 코드보다 문서를 먼저 수정한다.
+문서와 코드가 다르면 현재 코드와 테스트가 실행 사실의 기준이다. 과제 동작은 `docs/assignments.md`를 기준으로 유지하고, 계약을 바꿀 때는 코드보다 문서를 먼저 수정한다.
 
 ## 기술 방향
 

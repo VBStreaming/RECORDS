@@ -1,6 +1,6 @@
 # RECORDS 백엔드 구현 로드맵
 
-상태: **인증 완료, 과제(Assignment) 기능 착수 전**
+상태: **검증 MVP 백엔드 구현 완료**
 
 이 문서는 현재 코드에서 이어서 구현할 백엔드 작업의 순서와 완료 조건을 고정한다. 기능별 상세 API·DB 계약은 [`assignments.md`](assignments.md)를 따른다.
 
@@ -11,7 +11,7 @@
 | Python `.venv`, PostgreSQL, Alembic, Make 하네스 | 완료 | `5d7e4b0`, `538598a`, `5ff358c`, `995c053` |
 | 개발 규칙과 인증 계약 | 완료 | `1552382` |
 | 가입, 로그인, 현재 사용자 조회 | 완료 | `9288b81` |
-| 사용자별 과제 CRUD와 D-Day | 다음 구현 범위 | 이 문서의 TASK-003~007 |
+| 사용자별 과제 CRUD와 D-Day | 완료 | `8cb548e`, `e076a8d`, `a07a5d1`, `71e1baf` |
 
 ## 이번 구현 범위
 
@@ -43,7 +43,7 @@ flowchart LR
 
 TASK-004 이후 작업은 앞 작업의 migration과 API 계약을 전제로 한다. 앞 작업이 완료 조건을 통과하지 못하면 다음 작업을 시작하지 않는다.
 
-## TASK-003 과제 영속성 추가
+## TASK-003 과제 영속성 추가 — 완료
 
 - 목적: 인증 사용자에게 소유되는 과제를 PostgreSQL에 저장한다.
 - 관련 요구사항: 사용자별 과제, 과제명, 과목, 마감 일시, 완료 여부, 생성·수정 일시.
@@ -59,7 +59,7 @@ TASK-004 이후 작업은 앞 작업의 migration과 API 계약을 전제로 한
 - 권장 커밋 단위: `feat: add assignment persistence`.
 - 실패 시 축소 방안: 별도 subject table을 만들지 않고 문서에 정의된 subject code를 `VARCHAR`와 `CHECK`로 유지한다.
 
-## TASK-004 과제 생성·조회 구현
+## TASK-004 과제 생성·조회 구현 — 완료
 
 - 목적: 로그인한 학생이 과제를 등록하고 자신의 과제만 조회한다.
 - 관련 요구사항: 과제 생성, 날짜별·월간 조회, 상세 조회, D-Day 표시.
@@ -75,7 +75,7 @@ TASK-004 이후 작업은 앞 작업의 migration과 API 계약을 전제로 한
 - 권장 커밋 단위: `feat: implement assignment creation and queries`.
 - 실패 시 축소 방안: pagination은 추가하지 않고 조회 범위를 최대 62일로 제한한다.
 
-## TASK-005 과제 수정·완료 처리 구현
+## TASK-005 과제 수정·완료 처리 구현 — 완료
 
 - 목적: 학생이 자신의 과제 정보와 완료 상태를 안전하게 변경한다.
 - 관련 요구사항: 과제 수정, 완료, 완료 취소, 완료를 삭제로 처리하지 않음.
@@ -91,7 +91,7 @@ TASK-004 이후 작업은 앞 작업의 migration과 API 계약을 전제로 한
 - 권장 커밋 단위: `feat: implement assignment updates and completion`.
 - 실패 시 축소 방안: 범용 상태 enum 없이 `completed_at IS NULL`만으로 미완료를 판단한다.
 
-## TASK-006 과제 삭제·대시보드 구현
+## TASK-006 과제 삭제·대시보드 구현 — 완료
 
 - 목적: 과제 생명주기를 마무리하고 메인 화면에 필요한 집계값을 한 번에 제공한다.
 - 관련 요구사항: 과제 삭제, 진행 중 개수, 가장 가까운 미완료 과제, D-Day.
@@ -107,7 +107,7 @@ TASK-004 이후 작업은 앞 작업의 migration과 API 계약을 전제로 한
 - 권장 커밋 단위: `feat: add assignment dashboard and deletion`.
 - 실패 시 축소 방안: 별도 집계 table이나 cache 없이 현재 `assignments` table을 직접 조회한다.
 
-## TASK-007 검증 MVP 백엔드 회귀 검증
+## TASK-007 검증 MVP 백엔드 회귀 검증 — 완료
 
 - 목적: 인증부터 과제 생명주기까지 하나의 사용 흐름으로 검증한다.
 - 관련 요구사항: 검증 가능한 MVP, 권한 통제, migration과 품질 게이트.
@@ -152,4 +152,4 @@ git commit -m "<TASK의 권장 커밋 메시지>"
 
 ## 다음 착수점
 
-첫 개발 작업은 **TASK-003 과제 영속성 추가**다. 해당 작업을 시작하기 전에 [`assignments.md`](assignments.md)의 필드, subject code, 날짜 계산과 오류 계약을 다시 읽고 테스트 이름부터 확정한다.
+현재 문서에 확정된 백엔드 범위는 완료됐다. 다음 구현은 위 후순위 기능 중 실제 검증 결과로 필요성이 확인된 항목을 선택하고, API·보안·운영 계약을 별도 문서로 확정한 뒤 시작한다.

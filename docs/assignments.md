@@ -1,6 +1,6 @@
 # 과제(Assignment) 구현 계약
 
-상태: **구현 예정**
+상태: **구현 완료**
 
 이 문서는 검증 MVP에서 인증 사용자별 과제를 저장하고 조회하는 백엔드 계약이다. 구현 순서는 [`implementation-roadmap.md`](implementation-roadmap.md)의 TASK-003~007을 따른다.
 
