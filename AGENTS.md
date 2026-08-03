@@ -8,17 +8,19 @@ RECORDS는 FastAPI 단일 백엔드로 시작한다. 현재 구현 범위는 다
 
 1. 개발 하네스
 2. 이메일·비밀번호 인증
-3. 인증된 사용자별 TODO CRUD
+3. 인증된 사용자별 과제(Assignment) TODO CRUD
 
 사진, 이메일 인증, Refresh Token, 푸시 알림, 관리자 기능, 마이크로서비스는 현재 범위가 아니다. 요구 없이 미리 추가하지 않는다.
 
 ## 작업 전 읽을 문서
 
 - 개발·검증 절차: [`docs/development-workflow.md`](docs/development-workflow.md)
-- 다음 인증 작업의 계약: [`docs/authentication.md`](docs/authentication.md)
+- 전체 구현 순서와 Task: [`docs/implementation-roadmap.md`](docs/implementation-roadmap.md)
+- 완료된 인증 계약: [`docs/authentication.md`](docs/authentication.md)
+- 다음 과제 작업의 API·DB 계약: [`docs/assignments.md`](docs/assignments.md)
 - 로컬 실행 명령: [`README.md`](README.md)
 
-문서와 코드가 다르면 현재 코드와 테스트가 실행 사실의 기준이다. 계획된 인증 동작은 `docs/authentication.md`를 기준으로 구현하고, 계약을 바꿀 때는 코드보다 문서를 먼저 수정한다.
+문서와 코드가 다르면 현재 코드와 테스트가 실행 사실의 기준이다. 계획된 과제 동작은 `docs/assignments.md`를 기준으로 구현하고, 계약을 바꿀 때는 코드보다 문서를 먼저 수정한다.
 
 ## 기술 방향
 

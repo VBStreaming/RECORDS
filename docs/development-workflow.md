@@ -47,7 +47,7 @@
 
 ### 1. 계약을 먼저 고정한다
 
-구현 전에 요청·응답, 오류, DB 제약, 권한, 완료 조건을 `docs/`에 작성한다. 다음 작업인 인증은 [`authentication.md`](authentication.md)가 계약이다.
+구현 전에 요청·응답, 오류, DB 제약, 권한, 완료 조건을 `docs/`에 작성한다. 전체 순서는 [`implementation-roadmap.md`](implementation-roadmap.md), 다음 과제 기능의 상세 계약은 [`assignments.md`](assignments.md)를 따른다.
 
 ### 2. 실패 테스트를 작성한다
 

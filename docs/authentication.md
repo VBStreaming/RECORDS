@@ -176,4 +176,4 @@ service·repository·JWT provider interface는 만들지 않는다.
 
 ## 후속 작업
 
-인증 완료 후 사용자별 TODO CRUD를 구현한다. TODO 조회·수정·삭제는 반드시 `todo.id`와 인증 사용자의 `user_id`를 함께 조건으로 사용한다.
+인증 완료 후 [`implementation-roadmap.md`](implementation-roadmap.md)의 순서로 사용자별 과제 CRUD를 구현한다. 상세 계약은 [`assignments.md`](assignments.md)를 따르며 조회·수정·삭제는 반드시 과제 ID와 인증 사용자의 `user_id`를 같은 DB 조건에 사용한다.
