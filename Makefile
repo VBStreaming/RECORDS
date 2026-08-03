@@ -1,18 +1,33 @@
 PYTHON ?= /opt/homebrew/bin/python3.14
 VENV := .venv
+DATABASE_URL ?= postgresql+psycopg://records:records@localhost:54329/records
+TEST_DATABASE_URL ?= postgresql+psycopg://records:records@localhost:54329/records_test
 
-.PHONY: venv dev test lint format check lock
+.PHONY: venv db-up db-down dev migrate migration test lint format check lock
 
 venv:
 	$(PYTHON) -m venv $(VENV)
 	$(VENV)/bin/python -m pip install --upgrade pip
 	$(VENV)/bin/python -m pip install -r requirements.lock
 
+db-up:
+	docker compose up -d --wait db
+
+db-down:
+	docker compose down
+
 dev:
-	$(VENV)/bin/uvicorn app.main:app --reload
+	DATABASE_URL="$(DATABASE_URL)" $(VENV)/bin/uvicorn app.main:app --reload
+
+migrate:
+	DATABASE_URL="$(DATABASE_URL)" $(VENV)/bin/alembic upgrade head
+
+migration:
+	@test -n "$(name)" || (echo "name is required" && exit 1)
+	DATABASE_URL="$(DATABASE_URL)" $(VENV)/bin/alembic revision --autogenerate -m "$(name)"
 
 test:
-	$(VENV)/bin/pytest
+	DATABASE_URL="$(TEST_DATABASE_URL)" $(VENV)/bin/pytest
 
 lint:
 	$(VENV)/bin/ruff check .
@@ -20,7 +35,7 @@ lint:
 format:
 	$(VENV)/bin/ruff format .
 
-check: lint test
+check: migrate lint test
 
 lock:
 	$(VENV)/bin/python -m pip install -r requirements.in
