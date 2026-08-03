@@ -2,6 +2,12 @@
 
 FastAPI backend harness for the RECORDS assignment manager.
 
+## Documentation
+
+- [Backend development workflow](docs/development-workflow.md)
+- [Planned authentication contract](docs/authentication.md)
+- [Agent development rules](AGENTS.md)
+
 ## Requirements
 
 - Python 3.14 at `/opt/homebrew/bin/python3.14`
