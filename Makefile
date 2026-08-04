@@ -3,7 +3,7 @@ VENV := .venv
 DATABASE_URL ?= postgresql+psycopg://records:records@localhost:54329/records
 TEST_DATABASE_URL ?= postgresql+psycopg://records:records@localhost:54329/records_test
 
-.PHONY: venv db-up db-down dev migrate migrate-test migration test lint format check lock
+.PHONY: venv db-up db-down dev migrate migrate-test migration test lint format check lock web-install web-dev web-check
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -43,3 +43,12 @@ check: migrate migrate-test lint test
 lock:
 	$(VENV)/bin/python -m pip install -r requirements.in
 	$(VENV)/bin/python -m pip freeze > requirements.lock
+
+web-install:
+	npm --prefix web ci
+
+web-dev:
+	npm --prefix web run dev
+
+web-check:
+	npm --prefix web run check

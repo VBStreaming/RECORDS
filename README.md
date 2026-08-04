@@ -1,6 +1,6 @@
-# RECORDS Backend
+# RECORDS
 
-FastAPI backend harness for the RECORDS assignment manager.
+FastAPI API and responsive React web client for the RECORDS assignment manager.
 
 ## Documentation
 
@@ -10,6 +10,7 @@ FastAPI backend harness for the RECORDS assignment manager.
 - [Authentication contract](docs/authentication.md)
 - [Assignment API and data contract](docs/assignments.md)
 - [Photo assignment extraction contract](docs/photo-extraction.md)
+- [Web client and API connection](docs/web-client.md)
 - [Agent development rules](AGENTS.md)
 
 ## Requirements
@@ -27,6 +28,16 @@ make dev
 ```
 
 The API documentation is available at <http://127.0.0.1:8000/docs>.
+
+In another terminal, start the web client:
+
+```bash
+make web-install
+make web-dev
+```
+
+Open <http://127.0.0.1:5173>. Vite proxies `/api` to the local FastAPI server,
+so local development does not require CORS configuration.
 
 Use `make db-down` to stop PostgreSQL. Local settings can be overridden in a
 git-ignored `.env` copied from `.env.example`.
@@ -57,4 +68,5 @@ make migration name=create_users
 make lint
 make format
 make test
+make web-check
 ```
