@@ -11,14 +11,19 @@ FastAPI API and responsive React web client for the RECORDS assignment manager.
 - [Assignment API and data contract](docs/assignments.md)
 - [Photo assignment extraction contract](docs/photo-extraction.md)
 - [Web client and API connection](docs/web-client.md)
+- [Local setup for a new developer](docs/local-setup.md)
 - [Agent development rules](AGENTS.md)
 
 ## Requirements
 
-- Python 3.14 at `/opt/homebrew/bin/python3.14`
+- Python 3.14 available as `python3.14`
+- Node.js 22 and npm
 - Docker with Docker Compose
+- GNU Make
 
 ## Local setup
+
+For a clean machine, follow the complete [local setup guide](docs/local-setup.md).
 
 ```bash
 make venv

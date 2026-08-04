@@ -1,4 +1,4 @@
-PYTHON ?= /opt/homebrew/bin/python3.14
+PYTHON ?= python3.14
 VENV := .venv
 DATABASE_URL ?= postgresql+psycopg://records:records@localhost:54329/records
 TEST_DATABASE_URL ?= postgresql+psycopg://records:records@localhost:54329/records_test
