@@ -103,6 +103,30 @@ def test_candidate_requires_review_for_values_model_could_not_read() -> None:
         )
 
 
+def test_extraction_removes_empty_placeholder_candidates() -> None:
+    extraction = AssignmentExtraction(
+        candidates=[
+            AssignmentCandidate(
+                title="수학 프린트 3장",
+                subject=SubjectCode.MATH,
+                dueAt="2026-08-11T23:59:00+09:00",
+                needsReview=[],
+            ),
+            AssignmentCandidate(
+                title=None,
+                subject=None,
+                dueAt=None,
+                needsReview=["title", "subject", "dueAt"],
+            ),
+        ],
+        requiresConfirmation=True,
+        warnings=[],
+    )
+
+    assert len(extraction.candidates) == 1
+    assert extraction.candidates[0].title == "수학 프린트 3장"
+
+
 def test_extraction_requires_authentication(client: TestClient) -> None:
     response = client.post(
         "/assignment-extractions",

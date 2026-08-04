@@ -42,6 +42,7 @@ WarningText = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 SYSTEM_PROMPT = """사진에서 고등학생의 과제 정보를 추출하세요.
 - 사진에 보이는 정보만 사용하고 불명확한 값은 추측하지 말고 null로 반환하세요.
 - 한 사진에 과제가 여러 개면 각각 후보로 반환하되 최대 5개까지만 반환하세요.
+- 과제 정보가 하나도 없는 빈 후보나 자리 채우기용 후보는 반환하지 마세요.
 - 과목은 KOREAN, ENGLISH, MATH, SOCIAL_STUDIES, SCIENCE, HISTORY, ETC 중 하나입니다.
 - 시간이 없고 날짜가 명확하면 그 날짜의 23:59 Asia/Seoul을 사용하세요.
 - 연도 또는 날짜가 불명확하면 dueAt을 null로 반환하세요.
@@ -102,6 +103,21 @@ class AssignmentExtraction(BaseModel):
     warnings: list[WarningText] = Field(max_length=5)
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    @field_validator("candidates")
+    @classmethod
+    def remove_empty_candidates(
+        cls,
+        value: list[AssignmentCandidate],
+    ) -> list[AssignmentCandidate]:
+        return [
+            candidate
+            for candidate in value
+            if any(
+                item is not None
+                for item in (candidate.title, candidate.subject, candidate.due_at)
+            )
+        ]
 
 
 def _error(status_code: int, code: str, message: str) -> HTTPException:
