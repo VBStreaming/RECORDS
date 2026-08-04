@@ -38,8 +38,10 @@ COMMON_ERROR_RESPONSES = {
     405: {"model": ApiErrorResponse, "description": "Method not allowed"},
     409: {"model": ApiErrorResponse, "description": "Conflict"},
     422: {"model": ApiErrorResponse, "description": "Validation failed"},
+    429: {"model": ApiErrorResponse, "description": "Rate limited"},
+    502: {"model": ApiErrorResponse, "description": "Upstream service failed"},
     500: {"model": ApiErrorResponse, "description": "Internal server error"},
-    503: {"model": ApiErrorResponse, "description": "Database unavailable"},
+    503: {"model": ApiErrorResponse, "description": "Service unavailable"},
 }
 
 

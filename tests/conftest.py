@@ -6,6 +6,7 @@ from sqlalchemy import Connection
 from sqlalchemy.orm import Session
 
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret-key-with-32-bytes!!")
+os.environ["AI_EXTRACTION_ENABLED"] = "false"
 
 from app.db import engine
 

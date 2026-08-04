@@ -92,6 +92,10 @@ FastAPI/Pydantic 검증 실패는 `422 VALIDATION_ERROR`로 변환한다.
 | `INVALID_CREDENTIALS` | `401` | 로그인 정보 불일치 |
 | `INVALID_TOKEN` | `401` | token 없음, 위조, 만료 또는 사용자 없음 |
 | `ASSIGNMENT_NOT_FOUND` | `404` | 과제가 없거나 현재 사용자 소유가 아님 |
+| `INVALID_IMAGE` | `400` | 지원하지 않거나 제한을 초과한 이미지 |
+| `AI_RATE_LIMITED` | `429` | 사진 분석 호출 또는 외부 사용량 제한 도달 |
+| `AI_EXTRACTION_FAILED` | `502` | 외부 사진 분석 실패 또는 유효한 구조화 결과 없음 |
+| `AI_EXTRACTION_DISABLED` | `503` | 사진 분석 기능 비활성화 또는 API key 미설정 |
 
 업무 오류를 새로 추가할 때 endpoint에서는 `HTTPException`에 `code`와 `message`만 지정하고, JSON envelope 생성은 전역 handler에 맡긴다.
 
