@@ -9,8 +9,9 @@ RECORDS는 FastAPI 단일 백엔드로 시작한다. 현재 구현 범위는 다
 1. 개발 하네스
 2. 이메일·비밀번호 인증
 3. 인증된 사용자별 과제(Assignment) TODO CRUD
+4. 사진에서 과제 후보 자동 추출
 
-사진, 이메일 인증, Refresh Token, 푸시 알림, 관리자 기능, 마이크로서비스는 현재 범위가 아니다. 요구 없이 미리 추가하지 않는다.
+사진 자동 추출은 사용자가 결과를 확인·수정한 뒤 기존 과제 생성 API로 저장하는 흐름까지만 구현한다. 이메일 인증, Refresh Token, 푸시 알림, 관리자 기능, 마이크로서비스는 현재 범위가 아니다. 요구 없이 미리 추가하지 않는다.
 
 ## 작업 전 읽을 문서
 
@@ -19,6 +20,7 @@ RECORDS는 FastAPI 단일 백엔드로 시작한다. 현재 구현 범위는 다
 - 공통 API 응답과 예외 계약: [`docs/api-response.md`](docs/api-response.md)
 - 완료된 인증 계약: [`docs/authentication.md`](docs/authentication.md)
 - 구현된 과제 API·DB 계약: [`docs/assignments.md`](docs/assignments.md)
+- 사진 자동 추출 계약: [`docs/photo-extraction.md`](docs/photo-extraction.md)
 - 로컬 실행 명령: [`README.md`](README.md)
 
 문서와 코드가 다르면 현재 코드와 테스트가 실행 사실의 기준이다. 과제 동작은 `docs/assignments.md`를 기준으로 유지하고, 계약을 바꿀 때는 코드보다 문서를 먼저 수정한다.
@@ -65,6 +67,8 @@ make check
 - JSON 성공·오류 응답은 `docs/api-response.md`의 envelope를 사용한다. `204`는 빈 body를 유지한다.
 - 새 dependency는 표준 라이브러리나 이미 설치된 패키지로 해결할 수 없을 때만 추가한다.
 - 새 abstraction은 두 번째 실제 사용처가 생기기 전에는 추가하지 않는다.
+- OpenAI 호출은 테스트에서 Mock 처리하고 실제 호출은 명시적인 PoC에서만 수행한다.
+- API key, 원본 이미지, base64 payload, 전체 모델 응답을 로그에 남기지 않는다.
 
 ## 테스트 규칙
 

@@ -9,6 +9,7 @@ FastAPI backend harness for the RECORDS assignment manager.
 - [Common API response and exception contract](docs/api-response.md)
 - [Authentication contract](docs/authentication.md)
 - [Assignment API and data contract](docs/assignments.md)
+- [Photo assignment extraction contract](docs/photo-extraction.md)
 - [Agent development rules](AGENTS.md)
 
 ## Requirements
@@ -41,9 +42,12 @@ git-ignored `.env` copied from `.env.example`.
 - `POST /assignments`, `GET /assignments`, `GET /assignments/{assignment_id}`
 - `PATCH /assignments/{assignment_id}`, `PUT /assignments/{assignment_id}/completion`
 - `DELETE /assignments/{assignment_id}`, `GET /dashboard`
+- `POST /assignment-extractions`
 
 Assignment requests require the bearer access token returned by login. See the
 [assignment contract](docs/assignments.md) for request fields and date rules.
+Photo extraction is disabled by default and requires the settings documented in
+[the extraction contract](docs/photo-extraction.md).
 
 ## Common commands
 
