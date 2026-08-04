@@ -6,6 +6,7 @@ FastAPI backend harness for the RECORDS assignment manager.
 
 - [Backend development workflow](docs/development-workflow.md)
 - [Implementation roadmap](docs/implementation-roadmap.md)
+- [Common API response and exception contract](docs/api-response.md)
 - [Authentication contract](docs/authentication.md)
 - [Assignment API and data contract](docs/assignments.md)
 - [Agent development rules](AGENTS.md)

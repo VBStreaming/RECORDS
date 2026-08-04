@@ -16,6 +16,7 @@ RECORDS는 FastAPI 단일 백엔드로 시작한다. 현재 구현 범위는 다
 
 - 개발·검증 절차: [`docs/development-workflow.md`](docs/development-workflow.md)
 - 전체 구현 순서와 Task: [`docs/implementation-roadmap.md`](docs/implementation-roadmap.md)
+- 공통 API 응답과 예외 계약: [`docs/api-response.md`](docs/api-response.md)
 - 완료된 인증 계약: [`docs/authentication.md`](docs/authentication.md)
 - 구현된 과제 API·DB 계약: [`docs/assignments.md`](docs/assignments.md)
 - 로컬 실행 명령: [`README.md`](README.md)
@@ -61,6 +62,7 @@ make check
 - 비밀번호, JWT, 전체 요청 body를 로그에 남기지 않는다.
 - 시간은 timezone-aware UTC로 저장한다.
 - API 오류는 상태 코드와 안정적인 오류 `code`를 함께 반환한다.
+- JSON 성공·오류 응답은 `docs/api-response.md`의 envelope를 사용한다. `204`는 빈 body를 유지한다.
 - 새 dependency는 표준 라이브러리나 이미 설치된 패키지로 해결할 수 없을 때만 추가한다.
 - 새 abstraction은 두 번째 실제 사용처가 생기기 전에는 추가하지 않는다.
 
