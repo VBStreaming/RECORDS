@@ -11,14 +11,22 @@ def test_liveness() -> None:
     response = client.get("/health/live")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {
+        "success": True,
+        "data": {"status": "ok"},
+        "error": None,
+    }
 
 
 def test_readiness() -> None:
     response = client.get("/health/ready")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
+    assert response.json() == {
+        "success": True,
+        "data": {"status": "ready"},
+        "error": None,
+    }
 
 
 def test_readiness_when_database_is_unavailable(monkeypatch) -> None:
@@ -30,4 +38,6 @@ def test_readiness_when_database_is_unavailable(monkeypatch) -> None:
     response = client.get("/health/ready")
 
     assert response.status_code == 503
-    assert response.json() == {"status": "not_ready"}
+    assert response.json()["success"] is False
+    assert response.json()["data"] is None
+    assert response.json()["error"]["code"] == "DATABASE_UNAVAILABLE"

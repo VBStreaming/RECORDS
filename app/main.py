@@ -1,25 +1,23 @@
-from fastapi import FastAPI, Response
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi import FastAPI
 
 from app.assignments import router as assignments_router
 from app.auth import router as auth_router
 from app.db import check_database
+from app.exceptions import register_exception_handlers
+from app.responses import ApiResponse, COMMON_ERROR_RESPONSES, ok
 
-app = FastAPI(title="RECORDS API")
+app = FastAPI(title="RECORDS API", responses=COMMON_ERROR_RESPONSES)
+register_exception_handlers(app)
 app.include_router(auth_router)
 app.include_router(assignments_router)
 
 
-@app.get("/health/live", tags=["health"])
-def liveness() -> dict[str, str]:
-    return {"status": "ok"}
+@app.get("/health/live", response_model=ApiResponse[dict[str, str]], tags=["health"])
+def liveness() -> ApiResponse[dict[str, str]]:
+    return ok({"status": "ok"})
 
 
-@app.get("/health/ready", tags=["health"])
-def readiness(response: Response) -> dict[str, str]:
-    try:
-        check_database()
-    except SQLAlchemyError:
-        response.status_code = 503
-        return {"status": "not_ready"}
-    return {"status": "ready"}
+@app.get("/health/ready", response_model=ApiResponse[dict[str, str]], tags=["health"])
+def readiness() -> ApiResponse[dict[str, str]]:
+    check_database()
+    return ok({"status": "ready"})

@@ -14,6 +14,7 @@ from typing_extensions import Annotated
 from app.config import get_settings
 from app.db import get_db
 from app.models import User
+from app.responses import ApiResponse, ok
 
 
 router = APIRouter()
@@ -128,12 +129,15 @@ def get_current_user(
 
 @router.post(
     "/auth/signup",
-    response_model=UserResponse,
+    response_model=ApiResponse[UserResponse],
     response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
     tags=["auth"],
 )
-def signup(request: SignupRequest, db: Session = Depends(get_db)) -> UserResponse:
+def signup(
+    request: SignupRequest,
+    db: Session = Depends(get_db),
+) -> ApiResponse[UserResponse]:
     user = User(
         name=request.name,
         email=str(request.email).lower(),
@@ -151,16 +155,19 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)) -> UserRespons
             status.HTTP_409_CONFLICT,
         ) from None
     db.refresh(user)
-    return _user_response(user)
+    return ok(_user_response(user))
 
 
 @router.post(
     "/auth/login",
-    response_model=TokenResponse,
+    response_model=ApiResponse[TokenResponse],
     response_model_by_alias=True,
     tags=["auth"],
 )
-def login(request: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(
+    request: LoginRequest,
+    db: Session = Depends(get_db),
+) -> ApiResponse[TokenResponse]:
     user = db.scalar(select(User).where(User.email == str(request.email).lower()))
     if user is None or not password_hash.verify(request.password, user.password_hash):
         raise _error(
@@ -169,18 +176,20 @@ def login(request: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
             status.HTTP_401_UNAUTHORIZED,
         )
 
-    return TokenResponse(
-        accessToken=create_access_token(user.id),
-        tokenType="bearer",
-        expiresIn=ACCESS_TOKEN_SECONDS,
+    return ok(
+        TokenResponse(
+            accessToken=create_access_token(user.id),
+            tokenType="bearer",
+            expiresIn=ACCESS_TOKEN_SECONDS,
+        )
     )
 
 
 @router.get(
     "/users/me",
-    response_model=UserResponse,
+    response_model=ApiResponse[UserResponse],
     response_model_by_alias=True,
     tags=["users"],
 )
-def current_user(user: User = Depends(get_current_user)) -> UserResponse:
-    return _user_response(user)
+def current_user(user: User = Depends(get_current_user)) -> ApiResponse[UserResponse]:
+    return ok(_user_response(user))

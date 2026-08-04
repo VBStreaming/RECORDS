@@ -1,6 +1,6 @@
 # 공통 API 응답과 전역 예외 처리 계약
 
-상태: **구현 예정**
+상태: **구현 완료**
 
 이 문서는 RECORDS API의 JSON 성공·오류 응답 형식과 전역 예외 처리 규칙을 정의한다. `/docs`, `/openapi.json`과 body가 없는 `204 No Content` 응답은 envelope 대상이 아니다.
 

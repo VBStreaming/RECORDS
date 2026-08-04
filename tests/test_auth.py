@@ -35,14 +35,19 @@ def test_signup_stores_argon2_and_returns_safe_user(client: TestClient, db_sessi
     response = client.post("/auth/signup", json=signup_payload())
 
     assert response.status_code == 201
+    data = response.json()["data"]
     assert response.json() == {
-        "id": response.json()["id"],
-        "name": "테스트학생",
-        "email": "student@example.com",
-        "studentNumber": "10311",
+        "success": True,
+        "data": {
+            "id": data["id"],
+            "name": "테스트학생",
+            "email": "student@example.com",
+            "studentNumber": "10311",
+        },
+        "error": None,
     }
-    assert "password" not in response.json()
-    assert "password_hash" not in response.json()
+    assert "password" not in response.text
+    assert "password_hash" not in response.text
 
     user = db_session.scalar(select(User).where(User.email == "student@example.com"))
     assert user is not None
@@ -58,7 +63,7 @@ def test_signup_rejects_case_insensitive_duplicate_email(client: TestClient) -> 
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "EMAIL_ALREADY_EXISTS"
+    assert response.json()["error"]["code"] == "EMAIL_ALREADY_EXISTS"
 
 
 def test_signup_allows_duplicate_student_number(client: TestClient) -> None:
@@ -93,7 +98,7 @@ def test_login_returns_thirty_minute_access_token(client: TestClient) -> None:
     )
 
     assert response.status_code == 200
-    body = response.json()
+    body = response.json()["data"]
     assert body["tokenType"] == "bearer"
     assert body["expiresIn"] == ACCESS_TOKEN_SECONDS
     payload = jwt.decode(
@@ -126,7 +131,7 @@ def test_login_hides_unknown_email_and_wrong_password(client: TestClient) -> Non
 
 def test_current_user_requires_valid_token(client: TestClient) -> None:
     signup_response = client.post("/auth/signup", json=signup_payload())
-    user_id = signup_response.json()["id"]
+    user_id = signup_response.json()["data"]["id"]
     login_response = client.post(
         "/auth/login",
         json={"email": "student@example.com", "password": "example-password"},
@@ -134,12 +139,14 @@ def test_current_user_requires_valid_token(client: TestClient) -> None:
 
     response = client.get(
         "/users/me",
-        headers={"Authorization": f"Bearer {login_response.json()['accessToken']}"},
+        headers={
+            "Authorization": f"Bearer {login_response.json()['data']['accessToken']}"
+        },
     )
 
     assert response.status_code == 200
-    assert response.json()["id"] == user_id
-    assert response.json()["email"] == "student@example.com"
+    assert response.json()["data"]["id"] == user_id
+    assert response.json()["data"]["email"] == "student@example.com"
 
 
 @pytest.mark.parametrize("headers", [{}, {"Authorization": "Bearer forged"}])
@@ -149,7 +156,7 @@ def test_current_user_rejects_missing_or_forged_token(
     response = client.get("/users/me", headers=headers)
 
     assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "INVALID_TOKEN"
+    assert response.json()["error"]["code"] == "INVALID_TOKEN"
     assert response.headers["www-authenticate"] == "Bearer"
 
 
@@ -167,4 +174,4 @@ def test_current_user_rejects_expired_token(client: TestClient) -> None:
     response = client.get("/users/me", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "INVALID_TOKEN"
+    assert response.json()["error"]["code"] == "INVALID_TOKEN"

@@ -4,6 +4,8 @@
 
 이 문서는 검증 MVP에서 인증 사용자별 과제를 저장하고 조회하는 백엔드 계약이다. 구현 순서는 [`implementation-roadmap.md`](implementation-roadmap.md)의 TASK-003~007을 따른다.
 
+모든 JSON 응답은 [`api-response.md`](api-response.md)의 공통 envelope를 사용한다. 아래 성공 예시는 전체 응답의 `data`에 들어가는 payload만 표시한다.
+
 ## 범위
 
 포함:
@@ -70,7 +72,7 @@ index는 `(user_id, due_at)` 하나만 둔다. 검증 MVP에서는 사용자별 
 
 테스트는 현재 시각을 주입하거나 고정해 자정과 월·연도 경계에서 재현 가능해야 한다. 전역 시스템 시각을 직접 바꾸지 않는다.
 
-## 공통 과제 응답
+## 공통 과제 `data` payload
 
 ```json
 {
@@ -236,13 +238,16 @@ AND assignment.user_id = token의 현재 사용자 id
 
 ## 오류 형식
 
-애플리케이션이 직접 발생시키는 오류는 인증 API와 같은 형식을 사용한다.
+애플리케이션 오류는 [`api-response.md`](api-response.md)의 공통 오류 envelope를 사용한다.
 
 ```json
 {
-  "detail": {
+  "success": false,
+  "data": null,
+  "error": {
     "code": "ASSIGNMENT_NOT_FOUND",
-    "message": "과제를 찾을 수 없습니다."
+    "message": "과제를 찾을 수 없습니다.",
+    "details": null
   }
 }
 ```
@@ -251,7 +256,7 @@ AND assignment.user_id = token의 현재 사용자 id
 |---|---|---|
 | `401` | `INVALID_TOKEN` | token 없음, 위조, 만료, 사용자가 없음 |
 | `404` | `ASSIGNMENT_NOT_FOUND` | 과제가 없거나 현재 사용자 소유가 아님 |
-| `422` | FastAPI 기본 검증 오류 | body, query, path 형식 또는 범위 오류 |
+| `422` | `VALIDATION_ERROR` | body, query, path 형식 또는 범위 오류 |
 
 예상 가능한 사용자 입력 오류를 `500`으로 반환하지 않는다. DB 내부 오류, SQL, JWT, 전체 요청 body는 로그에 남기지 않는다.
 

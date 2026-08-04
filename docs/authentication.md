@@ -4,6 +4,8 @@
 
 이 문서는 최초 인증 기능의 고정 계약이다. 범위는 가입, 로그인, 현재 사용자 조회이며 Refresh Token, 이메일 인증, 비밀번호 재설정은 포함하지 않는다.
 
+모든 JSON 응답은 [`api-response.md`](api-response.md)의 공통 envelope를 사용한다. 아래 성공 예시는 전체 응답의 `data`에 들어가는 payload만 표시한다.
+
 ## 사용자 모델
 
 `users` 테이블은 다음 column만 가진다.
@@ -102,18 +104,7 @@ Authorization: Bearer <access-token>
 
 ## 오류 형식
 
-인증 API가 직접 발생시키는 오류는 다음 형태를 사용한다.
-
-```json
-{
-  "detail": {
-    "code": "INVALID_CREDENTIALS",
-    "message": "이메일 또는 비밀번호가 올바르지 않습니다."
-  }
-}
-```
-
-Pydantic 입력 검증 오류의 기본 `422` 형식은 이번 작업에서 별도 변환하지 않는다.
+인증 오류는 [`api-response.md`](api-response.md)의 공통 오류 envelope를 사용한다. `INVALID_CREDENTIALS`, `INVALID_TOKEN`, `EMAIL_ALREADY_EXISTS` code와 기존 HTTP 상태는 그대로 유지하며 입력 검증 오류는 `422 VALIDATION_ERROR`로 변환한다.
 
 ## 비밀번호와 JWT
 

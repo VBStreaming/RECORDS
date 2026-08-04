@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import Assignment, SubjectCode, User
+from app.responses import ApiResponse, ok
 
 
 router = APIRouter()
@@ -165,7 +166,7 @@ def _owned_assignment(db: Session, assignment_id: UUID, user_id: UUID) -> Assign
 
 @router.post(
     "/assignments",
-    response_model=AssignmentResponse,
+    response_model=ApiResponse[AssignmentResponse],
     response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
     tags=["assignments"],
@@ -174,7 +175,7 @@ def create_assignment(
     request: AssignmentCreate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> AssignmentResponse:
+) -> ApiResponse[AssignmentResponse]:
     assignment = Assignment(
         user_id=user.id,
         title=request.title,
@@ -184,12 +185,12 @@ def create_assignment(
     db.add(assignment)
     db.commit()
     db.refresh(assignment)
-    return _assignment_response(assignment)
+    return ok(_assignment_response(assignment))
 
 
 @router.get(
     "/assignments",
-    response_model=list[AssignmentResponse],
+    response_model=ApiResponse[list[AssignmentResponse]],
     response_model_by_alias=True,
     tags=["assignments"],
 )
@@ -197,7 +198,7 @@ def list_assignments(
     filters: Annotated[AssignmentListQuery, Query()],
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[AssignmentResponse]:
+) -> ApiResponse[list[AssignmentResponse]]:
     start_at = datetime.combine(filters.start, time.min, KOREA_ZONE).astimezone(UTC)
     end_at = datetime.combine(
         filters.end + timedelta(days=1), time.min, KOREA_ZONE
@@ -228,12 +229,14 @@ def list_assignments(
         )
     ).all()
     now = _now_utc()
-    return [_assignment_response(assignment, now=now) for assignment in assignments]
+    return ok(
+        [_assignment_response(assignment, now=now) for assignment in assignments]
+    )
 
 
 @router.get(
     "/assignments/{assignment_id}",
-    response_model=AssignmentResponse,
+    response_model=ApiResponse[AssignmentResponse],
     response_model_by_alias=True,
     tags=["assignments"],
 )
@@ -241,13 +244,13 @@ def get_assignment(
     assignment_id: UUID,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> AssignmentResponse:
-    return _assignment_response(_owned_assignment(db, assignment_id, user.id))
+) -> ApiResponse[AssignmentResponse]:
+    return ok(_assignment_response(_owned_assignment(db, assignment_id, user.id)))
 
 
 @router.patch(
     "/assignments/{assignment_id}",
-    response_model=AssignmentResponse,
+    response_model=ApiResponse[AssignmentResponse],
     response_model_by_alias=True,
     tags=["assignments"],
 )
@@ -256,7 +259,7 @@ def update_assignment(
     request: AssignmentUpdate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> AssignmentResponse:
+) -> ApiResponse[AssignmentResponse]:
     assignment = _owned_assignment(db, assignment_id, user.id)
     changed = False
 
@@ -277,12 +280,12 @@ def update_assignment(
         assignment.updated_at = now
         db.commit()
         db.refresh(assignment)
-    return _assignment_response(assignment, now=now)
+    return ok(_assignment_response(assignment, now=now))
 
 
 @router.put(
     "/assignments/{assignment_id}/completion",
-    response_model=AssignmentResponse,
+    response_model=ApiResponse[AssignmentResponse],
     response_model_by_alias=True,
     tags=["assignments"],
 )
@@ -291,7 +294,7 @@ def set_assignment_completion(
     request: CompletionRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> AssignmentResponse:
+) -> ApiResponse[AssignmentResponse]:
     assignment = _owned_assignment(db, assignment_id, user.id)
     now = _now_utc()
     is_completed = assignment.completed_at is not None
@@ -300,7 +303,7 @@ def set_assignment_completion(
         assignment.updated_at = now
         db.commit()
         db.refresh(assignment)
-    return _assignment_response(assignment, now=now)
+    return ok(_assignment_response(assignment, now=now))
 
 
 @router.delete(
@@ -321,14 +324,14 @@ def delete_assignment(
 
 @router.get(
     "/dashboard",
-    response_model=DashboardResponse,
+    response_model=ApiResponse[DashboardResponse],
     response_model_by_alias=True,
     tags=["assignments"],
 )
 def dashboard(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> DashboardResponse:
+) -> ApiResponse[DashboardResponse]:
     active_conditions = (
         Assignment.user_id == user.id,
         Assignment.completed_at.is_(None),
@@ -350,9 +353,13 @@ def dashboard(
             .order_by(Assignment.due_at.asc(), Assignment.id.asc())
             .limit(1)
         )
-    return DashboardResponse(
-        activeCount=active_count or 0,
-        nearestAssignment=(
-            _assignment_response(nearest, now=now) if nearest is not None else None
-        ),
+    return ok(
+        DashboardResponse(
+            activeCount=active_count or 0,
+            nearestAssignment=(
+                _assignment_response(nearest, now=now)
+                if nearest is not None
+                else None
+            ),
+        )
     )

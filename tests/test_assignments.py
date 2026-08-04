@@ -38,6 +38,13 @@ def client(db_session: Session):
     main.app.dependency_overrides.clear()
 
 
+def _data(response):
+    body = response.json()
+    assert body["success"] is True
+    assert body["error"] is None
+    return body["data"]
+
+
 def _signup_and_login(
     client: TestClient,
     *,
@@ -60,8 +67,8 @@ def _signup_and_login(
     )
     assert login.status_code == 200
     return (
-        {"Authorization": f"Bearer {login.json()['accessToken']}"},
-        UUID(signup.json()["id"]),
+        {"Authorization": f"Bearer {_data(login)['accessToken']}"},
+        UUID(_data(signup)["id"]),
     )
 
 
@@ -142,20 +149,25 @@ def test_create_assignment_uses_token_owner_and_returns_dday(
     )
 
     assert response.status_code == 201
+    data = _data(response)
     assert response.json() == {
-        "id": response.json()["id"],
-        "title": "수학 프린트 3장",
-        "subject": "MATH",
-        "dueAt": "2026-08-08T14:00:00Z",
-        "completed": False,
-        "completedAt": None,
-        "dayOffset": 4,
-        "deadlineLabel": "D-4",
-        "createdAt": response.json()["createdAt"],
-        "updatedAt": response.json()["updatedAt"],
+        "success": True,
+        "data": {
+            "id": data["id"],
+            "title": "수학 프린트 3장",
+            "subject": "MATH",
+            "dueAt": "2026-08-08T14:00:00Z",
+            "completed": False,
+            "completedAt": None,
+            "dayOffset": 4,
+            "deadlineLabel": "D-4",
+            "createdAt": data["createdAt"],
+            "updatedAt": data["updatedAt"],
+        },
+        "error": None,
     }
-    assert "userId" not in response.json()
-    stored = db_session.get(Assignment, UUID(response.json()["id"]))
+    assert "userId" not in data
+    stored = db_session.get(Assignment, UUID(data["id"]))
     assert stored is not None
     assert stored.user_id == user_id
 
@@ -212,7 +224,7 @@ def test_assignment_endpoints_require_authentication(client: TestClient) -> None
     response = _create_via_api(client, {})
 
     assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "INVALID_TOKEN"
+    assert response.json()["error"]["code"] == "INVALID_TOKEN"
 
 
 def test_list_assignments_uses_korean_date_boundaries_and_completion_filter(
@@ -239,7 +251,7 @@ def test_list_assignments_uses_korean_date_boundaries_and_completion_filter(
         dueAt="2026-09-01T00:00:00+09:00",
     )
     assert [first.status_code, second.status_code, outside.status_code] == [201, 201, 201]
-    completed = db_session.get(Assignment, UUID(first.json()["id"]))
+    completed = db_session.get(Assignment, UUID(_data(first)["id"]))
     assert completed is not None
     completed.completed_at = datetime(2026, 8, 2, tzinfo=timezone.utc)
     db_session.flush()
@@ -254,11 +266,13 @@ def test_list_assignments_uses_korean_date_boundaries_and_completion_filter(
     )
 
     assert all_response.status_code == 200
-    assert [item["title"] for item in all_response.json()] == [
+    assert [item["title"] for item in _data(all_response)] == [
         "마지막날 과제",
         "첫날 과제",
     ]
-    assert [item["title"] for item in incomplete_response.json()] == ["마지막날 과제"]
+    assert [item["title"] for item in _data(incomplete_response)] == [
+        "마지막날 과제"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -289,17 +303,17 @@ def test_assignment_detail_hides_other_users_assignment(client: TestClient) -> N
     )
 
     owner_response = client.get(
-        f"/assignments/{created.json()['id']}",
+        f"/assignments/{_data(created)['id']}",
         headers=owner_headers,
     )
     other_response = client.get(
-        f"/assignments/{created.json()['id']}",
+        f"/assignments/{_data(created)['id']}",
         headers=other_headers,
     )
 
     assert owner_response.status_code == 200
     assert other_response.status_code == 404
-    assert other_response.json()["detail"]["code"] == "ASSIGNMENT_NOT_FOUND"
+    assert other_response.json()["error"]["code"] == "ASSIGNMENT_NOT_FOUND"
 
 
 def test_update_assignment_changes_only_supplied_fields(
@@ -312,7 +326,7 @@ def test_update_assignment_changes_only_supplied_fields(
     monkeypatch.setattr(assignment_module, "_now_utc", lambda: update_time)
 
     response = client.patch(
-        f"/assignments/{created.json()['id']}",
+        f"/assignments/{_data(created)['id']}",
         json={
             "title": " 영어 에세이 ",
             "subject": "ENGLISH",
@@ -322,11 +336,12 @@ def test_update_assignment_changes_only_supplied_fields(
     )
 
     assert response.status_code == 200
-    assert response.json()["title"] == "영어 에세이"
-    assert response.json()["subject"] == "ENGLISH"
-    assert response.json()["dueAt"] == "2026-08-10T14:00:00Z"
-    assert response.json()["updatedAt"] == "2026-08-05T03:00:00Z"
-    assert response.json()["completed"] is False
+    data = _data(response)
+    assert data["title"] == "영어 에세이"
+    assert data["subject"] == "ENGLISH"
+    assert data["dueAt"] == "2026-08-10T14:00:00Z"
+    assert data["updatedAt"] == "2026-08-05T03:00:00Z"
+    assert data["completed"] is False
 
 
 @pytest.mark.parametrize("payload", [{}, {"title": None}])
@@ -338,7 +353,7 @@ def test_update_assignment_rejects_empty_or_null_fields(
     created = _create_via_api(client, headers)
 
     response = client.patch(
-        f"/assignments/{created.json()['id']}",
+        f"/assignments/{_data(created)['id']}",
         json=payload,
         headers=headers,
     )
@@ -352,32 +367,32 @@ def test_completion_is_idempotent_and_can_be_reopened(
 ) -> None:
     headers, _ = _signup_and_login(client)
     created = _create_via_api(client, headers)
-    endpoint = f"/assignments/{created.json()['id']}/completion"
+    endpoint = f"/assignments/{_data(created)['id']}/completion"
     current_time = datetime(2026, 8, 5, 3, tzinfo=timezone.utc)
     monkeypatch.setattr(assignment_module, "_now_utc", lambda: current_time)
 
     completed = client.put(endpoint, json={"completed": True}, headers=headers)
     assert completed.status_code == 200
-    assert completed.json()["completedAt"] == "2026-08-05T03:00:00Z"
-    assert completed.json()["updatedAt"] == "2026-08-05T03:00:00Z"
+    assert _data(completed)["completedAt"] == "2026-08-05T03:00:00Z"
+    assert _data(completed)["updatedAt"] == "2026-08-05T03:00:00Z"
 
     current_time = datetime(2026, 8, 6, 3, tzinfo=timezone.utc)
     completed_again = client.put(endpoint, json={"completed": True}, headers=headers)
     assert completed_again.status_code == 200
-    assert completed_again.json()["completedAt"] == completed.json()["completedAt"]
-    assert completed_again.json()["updatedAt"] == completed.json()["updatedAt"]
+    assert _data(completed_again)["completedAt"] == _data(completed)["completedAt"]
+    assert _data(completed_again)["updatedAt"] == _data(completed)["updatedAt"]
 
     current_time = datetime(2026, 8, 7, 3, tzinfo=timezone.utc)
     reopened = client.put(endpoint, json={"completed": False}, headers=headers)
     assert reopened.status_code == 200
-    assert reopened.json()["completed"] is False
-    assert reopened.json()["completedAt"] is None
-    assert reopened.json()["updatedAt"] == "2026-08-07T03:00:00Z"
+    assert _data(reopened)["completed"] is False
+    assert _data(reopened)["completedAt"] is None
+    assert _data(reopened)["updatedAt"] == "2026-08-07T03:00:00Z"
 
     current_time = datetime(2026, 8, 8, 3, tzinfo=timezone.utc)
     reopened_again = client.put(endpoint, json={"completed": False}, headers=headers)
     assert reopened_again.status_code == 200
-    assert reopened_again.json()["updatedAt"] == reopened.json()["updatedAt"]
+    assert _data(reopened_again)["updatedAt"] == _data(reopened)["updatedAt"]
 
 
 @pytest.mark.parametrize(
@@ -403,13 +418,13 @@ def test_update_endpoints_hide_other_users_assignment(
 
     response = client.request(
         method,
-        f"/assignments/{created.json()['id']}{suffix}",
+        f"/assignments/{_data(created)['id']}{suffix}",
         json=payload,
         headers=other_headers,
     )
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "ASSIGNMENT_NOT_FOUND"
+    assert response.json()["error"]["code"] == "ASSIGNMENT_NOT_FOUND"
 
 
 def test_delete_assignment_removes_only_owned_assignment(client: TestClient) -> None:
@@ -420,7 +435,7 @@ def test_delete_assignment_removes_only_owned_assignment(client: TestClient) -> 
         email="other-student@example.com",
         student_number="20311",
     )
-    endpoint = f"/assignments/{created.json()['id']}"
+    endpoint = f"/assignments/{_data(created)['id']}"
 
     forbidden = client.delete(endpoint, headers=other_headers)
     owner_can_still_read = client.get(endpoint, headers=owner_headers)
@@ -428,7 +443,7 @@ def test_delete_assignment_removes_only_owned_assignment(client: TestClient) -> 
     deleted_again = client.delete(endpoint, headers=owner_headers)
 
     assert forbidden.status_code == 404
-    assert forbidden.json()["detail"]["code"] == "ASSIGNMENT_NOT_FOUND"
+    assert forbidden.json()["error"]["code"] == "ASSIGNMENT_NOT_FOUND"
     assert owner_can_still_read.status_code == 200
     assert deleted.status_code == 204
     assert deleted.content == b""
@@ -441,7 +456,7 @@ def test_dashboard_is_empty_without_active_assignments(client: TestClient) -> No
     response = client.get("/dashboard", headers=headers)
 
     assert response.status_code == 200
-    assert response.json() == {"activeCount": 0, "nearestAssignment": None}
+    assert _data(response) == {"activeCount": 0, "nearestAssignment": None}
 
 
 def test_dashboard_counts_current_user_and_prefers_recent_overdue(
@@ -476,7 +491,7 @@ def test_dashboard_counts_current_user_and_prefers_recent_overdue(
         dueAt="2026-08-06T09:00:00+09:00",
     )
     client.put(
-        f"/assignments/{completed.json()['id']}/completion",
+        f"/assignments/{_data(completed)['id']}/completion",
         json={"completed": True},
         headers=headers,
     )
@@ -496,9 +511,10 @@ def test_dashboard_counts_current_user_and_prefers_recent_overdue(
 
     assert recent_overdue.status_code == 201
     assert response.status_code == 200
-    assert response.json()["activeCount"] == 3
-    assert response.json()["nearestAssignment"]["title"] == "방금 지난 과제"
-    assert response.json()["nearestAssignment"]["deadlineLabel"] == "D-Day"
+    data = _data(response)
+    assert data["activeCount"] == 3
+    assert data["nearestAssignment"]["title"] == "방금 지난 과제"
+    assert data["nearestAssignment"]["deadlineLabel"] == "D-Day"
 
 
 def test_dashboard_uses_earliest_upcoming_when_nothing_is_overdue(
@@ -524,8 +540,9 @@ def test_dashboard_uses_earliest_upcoming_when_nothing_is_overdue(
     response = client.get("/dashboard", headers=headers)
 
     assert response.status_code == 200
-    assert response.json()["activeCount"] == 2
-    assert response.json()["nearestAssignment"]["title"] == "먼저 과제"
+    data = _data(response)
+    assert data["activeCount"] == 2
+    assert data["nearestAssignment"]["title"] == "먼저 과제"
 
 
 def test_authenticated_assignment_lifecycle(client: TestClient) -> None:
@@ -533,14 +550,14 @@ def test_authenticated_assignment_lifecycle(client: TestClient) -> None:
 
     created = _create_via_api(client, headers)
     assert created.status_code == 201
-    assignment_id = created.json()["id"]
+    assignment_id = _data(created)["id"]
 
     listed = client.get(
         "/assignments?from=2026-08-01&to=2026-08-31",
         headers=headers,
     )
     assert listed.status_code == 200
-    assert [item["id"] for item in listed.json()] == [assignment_id]
+    assert [item["id"] for item in _data(listed)] == [assignment_id]
 
     updated = client.patch(
         f"/assignments/{assignment_id}",
@@ -548,7 +565,7 @@ def test_authenticated_assignment_lifecycle(client: TestClient) -> None:
         headers=headers,
     )
     assert updated.status_code == 200
-    assert updated.json()["title"] == "수학 프린트 제출"
+    assert _data(updated)["title"] == "수학 프린트 제출"
 
     completed = client.put(
         f"/assignments/{assignment_id}/completion",
@@ -556,11 +573,11 @@ def test_authenticated_assignment_lifecycle(client: TestClient) -> None:
         headers=headers,
     )
     assert completed.status_code == 200
-    assert completed.json()["completed"] is True
+    assert _data(completed)["completed"] is True
 
     dashboard = client.get("/dashboard", headers=headers)
     assert dashboard.status_code == 200
-    assert dashboard.json() == {"activeCount": 0, "nearestAssignment": None}
+    assert _data(dashboard) == {"activeCount": 0, "nearestAssignment": None}
 
     deleted = client.delete(f"/assignments/{assignment_id}", headers=headers)
     assert deleted.status_code == 204
