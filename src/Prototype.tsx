@@ -465,11 +465,15 @@ function NotificationBell() {
   useEffect(() => {
     if ("Notification" in window) setPermission(window.Notification.permission);
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 60_000);
+    const timer = window.setInterval(() => void refresh(), 15_000);
     window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
     };
   }, [refresh]);
 
@@ -518,7 +522,7 @@ function NotificationBell() {
               <option value="30">30분 전</option>
               <option value="10">10분 전</option>
             </select>
-            <small>D-1 오전 7시와 D-Day 오전 7시 30분 알림은 항상 켜져 있어요.</small>
+            <small>D-7·D-4·D-1 오전 7시와 D-Day 오전 7시 30분 알림은 항상 켜져 있어요.</small>
           </div>
           {permission === "default" ? <button className="browser-notification-button" onClick={() => void enableBrowserNotifications()}>브라우저 알림 허용</button> : null}
           {permission === "unsupported" && !window.isSecureContext ? <p className="notification-hint">기기 알림은 HTTPS 접속에서 사용할 수 있어요.</p> : null}

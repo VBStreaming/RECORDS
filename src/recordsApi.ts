@@ -25,7 +25,7 @@ export type Assignment = {
 export type AppNotification = {
   id: string;
   assignmentId: string;
-  type: "D_MINUS_4" | "D_MINUS_1" | "D_DAY" | "BEFORE_DEADLINE";
+  type: "D_MINUS_7" | "D_MINUS_4" | "D_MINUS_1" | "D_DAY" | "BEFORE_DEADLINE";
   offsetMinutes: number;
   title: string;
   message: string;

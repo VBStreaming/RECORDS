@@ -253,9 +253,56 @@ test("notification preferences are available from the dashboard", async ({ page 
 
   await page.getByRole("button", { name: "알림" }).click();
   await expect(page.getByRole("region", { name: "알림 목록" })).toBeVisible();
-  await expect(page.getByText("D-1 오전 7시와 D-Day 오전 7시 30분 알림은 항상 켜져 있어요.")).toBeVisible();
+  await expect(page.getByText("D-7·D-4·D-1 오전 7시와 D-Day 오전 7시 30분 알림은 항상 켜져 있어요.")).toBeVisible();
   await page.getByRole("combobox", { name: "마감 전 알림" }).selectOption("30");
   await expect(page.getByRole("combobox", { name: "마감 전 알림" })).toHaveValue("30");
+});
+
+test("delivered notifications trigger a browser notification while the app is open", async ({ page }) => {
+  let notificationListCalls = 0;
+  await page.addInitScript(() => {
+    class TestNotification {
+      static permission = "granted";
+      constructor(title: string, options?: { body?: string }) {
+        (window as Window & { __browserNotifications?: unknown[] }).__browserNotifications ??= [];
+        (window as Window & { __browserNotifications: unknown[] }).__browserNotifications.push({ title, body: options?.body });
+      }
+    }
+    Object.defineProperty(window, "Notification", { configurable: true, value: TestNotification });
+  });
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [] }) });
+      return;
+    }
+    if (url.pathname === "/notifications" && request.method() === "GET") {
+      notificationListCalls += 1;
+      const data = notificationListCalls > 1 ? [{ id: "notification-1", assignmentId: "assignment-1", type: "D_MINUS_1", offsetMinutes: -1, title: "마감 알림", message: "수학 과제가 내일 마감입니다.", dueAt: "2030-08-10T14:00:00Z", scheduledAt: "2030-08-09T22:00:00Z", deliveredAt: "2030-08-09T22:00:01Z", readAt: null }] : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    if (url.pathname === "/notifications/unread-count") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { count: notificationListCalls > 1 ? 1 : 0 } }) });
+      return;
+    }
+    if (url.pathname === "/notifications/preferences") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { beforeDeadlineMinutes: 60 } }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
+  await page.goto("/?screen=dashboard&theme=light");
+  await expect.poll(() => notificationListCalls).toBeGreaterThan(0);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect.poll(() => page.evaluate(() => (window as Window & { __browserNotifications?: unknown[] }).__browserNotifications?.length || 0)).toBe(1);
+  await expect(page.getByRole("button", { name: "알림" })).toContainText("1");
 });
 
 test("cached assignments remain usable offline and sync after reconnect", async ({ page, context, browserName }) => {
