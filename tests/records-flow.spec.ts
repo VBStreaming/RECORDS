@@ -82,10 +82,61 @@ test("responsive signup, calendar, task edit and dashboard flows work", async ({
   await page.goto("/?screen=dashboard&theme=light");
   await expect(page.locator(".tablet-dashboard")).toHaveCount(0);
   await expect(page.locator(".flow-stack")).toBeVisible();
+  await expect(page.locator(".mobile-cursor")).toHaveCount(0);
   await expect(page.locator(".keyboard-dock")).toHaveCSS("display", "none");
   await expect(page.getByRole("heading", { name: "수학 오답노트 수정" })).toBeVisible();
   await page.getByRole("button", { name: "수학 오답노트 수정 수정" }).click();
   await expect(page.locator(".bottom-sheet .sheet-title")).toHaveText("과제 수정");
+});
+
+test("saving an assignment selects its month in the calendar", async ({ page }) => {
+  let createdAssignment: Record<string, unknown> | null = null;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments" && request.method() === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: createdAssignment ? [createdAssignment] : [] }) });
+      return;
+    }
+    if (url.pathname === "/assignments" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { title: string; subject: string; dueAt: string };
+      createdAssignment = { id: "assignment-1", ...payload, completed: false, completedAt: null, dayOffset: 1, deadlineLabel: "D-1" };
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: createdAssignment }) });
+      return;
+    }
+    if (url.pathname.startsWith("/notifications")) {
+      const data = url.pathname.endsWith("unread-count") ? { count: 0 } : url.pathname.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?screen=dashboard&theme=light");
+
+  const nextMonthDate = await page.evaluate(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() + 1, 15);
+    return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date);
+  });
+  const [nextYear, nextMonth] = nextMonthDate.split("-");
+  await page.getByRole("button", { name: "사진으로 추가" }).click();
+  await page.getByRole("textbox", { name: "과제명" }).fill("다음 달 과제");
+  await page.getByRole("textbox", { name: "과목" }).fill("자율");
+  await page.getByRole("textbox", { name: "마감일" }).fill(nextMonthDate);
+  await page.getByRole("button", { name: "과제 저장" }).click();
+
+  await expect(page.locator(".calendar-card").getByRole("heading", { name: `${nextYear}. ${nextMonth}` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "다음 달 과제" })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?screen=dashboard&theme=light");
+  await expect(page.locator(".flow-stack")).toBeVisible();
+  await expect(page.locator(".mobile-cursor")).toHaveCount(0);
 });
 
 test("expired access token redirects to login on tablet and mobile", async ({ page }) => {

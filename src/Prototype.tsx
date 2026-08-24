@@ -213,13 +213,17 @@ function useCalendar(tasks: Task[]) {
     () => [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, index) => index + 1)],
     [firstWeekday, daysInMonth],
   );
+  const selectDate = (date: string) => {
+    const [nextYear, nextMonth] = date.split("-").map(Number);
+    setCursor(new Date(nextYear, nextMonth - 1, 1));
+    setSelectedDate(date);
+  };
   const changeMonth = (delta: number) => {
     const next = new Date(year, month + delta, 1);
-    setCursor(next);
-    setSelectedDate(isoDate(next.getFullYear(), next.getMonth(), 1));
+    selectDate(isoDate(next.getFullYear(), next.getMonth(), 1));
   };
 
-  return { year, month, cells, selectedDate, setSelectedDate, changeMonth, tasks };
+  return { year, month, cells, selectedDate, selectDate, changeMonth, tasks };
 }
 
 function ThemeButton() {
@@ -483,7 +487,7 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
 }
 
 function CalendarPanel({ calendar, tasks, expanded = false }: { calendar: ReturnType<typeof useCalendar>; tasks: Task[]; expanded?: boolean }) {
-  const { year, month, cells, selectedDate, setSelectedDate, changeMonth } = calendar;
+  const { year, month, cells, selectedDate, selectDate, changeMonth } = calendar;
   return (
     <section className={`calendar-card ${expanded ? "expanded" : ""}`}>
       <div className="calendar-header">
@@ -505,7 +509,7 @@ function CalendarPanel({ calendar, tasks, expanded = false }: { calendar: Return
             <button
               className={`day ${hasTask ? "has-task" : ""} ${selected ? "selected" : ""}`}
               key={date}
-              onClick={() => setSelectedDate(date)}
+              onClick={() => selectDate(date)}
               aria-label={`${month + 1}월 ${day}일${hasTask ? ", 과제 있음" : ""}`}
               aria-pressed={selected}
             >
@@ -634,7 +638,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       if (candidate.dueAt) {
         const date = new Date(candidate.dueAt);
         setDueTime(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(date));
-        calendar.setSelectedDate(new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date));
+        calendar.selectDate(new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date));
       }
     } catch (analysisError) {
       setError(apiErrorMessage(analysisError));
@@ -649,7 +653,9 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     setError("");
     try {
       const created = await createAssignment(title.trim(), subject, dueAt(calendar.selectedDate, dueTime));
-      setTasks((current) => [...current, taskFromAssignment(created)]);
+      const createdTask = taskFromAssignment(created);
+      setTasks((current) => [...current, createdTask]);
+      calendar.selectDate(createdTask.date);
       setTitle("");
       setFile(null);
       setSheetOpen(false);
@@ -677,7 +683,9 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     setError("");
     try {
       const updated = await updateAssignment(editingTask.id, editingTask.title.trim(), editingTask.subject.trim(), dueAt(editingTask.date, editingTask.time));
-      setTasks((current) => current.map((task) => task.id === updated.id ? taskFromAssignment(updated) : task));
+      const updatedTask = taskFromAssignment(updated);
+      setTasks((current) => current.map((task) => task.id === updated.id ? updatedTask : task));
+      calendar.selectDate(updatedTask.date);
       setEditingTask(null);
     } catch (saveError) {
       setError(apiErrorMessage(saveError));
@@ -717,8 +725,8 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
           <label className="form-field"><span>과제명</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="과제명을 입력하세요" /></label>
           <div className="form-row">
-          <label className="form-field"><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
-            <label className="form-field"><span>마감일</span><input type="date" value={calendar.selectedDate} onChange={(event) => calendar.setSelectedDate(event.target.value)} /></label>
+            <label className="form-field"><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
+            <label className="form-field"><span>마감일</span><input type="date" value={calendar.selectedDate} onChange={(event) => calendar.selectDate(event.target.value)} /></label>
           </div>
           <label className="form-field"><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => setDueTime(event.target.value)} /></label>
           <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
@@ -872,7 +880,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
       if (candidate.dueAt) {
         const date = new Date(candidate.dueAt);
         setDueTime(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(date));
-        calendar.setSelectedDate(new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date));
+        calendar.selectDate(new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date));
       }
     } catch (analysisError) {
       setError(apiErrorMessage(analysisError));
@@ -887,7 +895,9 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     setError("");
     try {
       const created = await createAssignment(title.trim(), subject, dueAt(calendar.selectedDate, dueTime));
-      setTasks((current) => [...current, taskFromAssignment(created)]);
+      const createdTask = taskFromAssignment(created);
+      setTasks((current) => [...current, createdTask]);
+      calendar.selectDate(createdTask.date);
       setTitle("");
       setFile(null);
       setAddOpen(false);
@@ -915,7 +925,9 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     setError("");
     try {
       const updated = await updateAssignment(editingTask.id, editingTask.title.trim(), editingTask.subject.trim(), dueAt(editingTask.date, editingTask.time));
-      setTasks((current) => current.map((task) => task.id === updated.id ? taskFromAssignment(updated) : task));
+      const updatedTask = taskFromAssignment(updated);
+      setTasks((current) => current.map((task) => task.id === updated.id ? updatedTask : task));
+      calendar.selectDate(updatedTask.date);
       setEditingTask(null);
     } catch (saveError) {
       setError(apiErrorMessage(saveError));
@@ -961,7 +973,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
             <label className="form-field"><span>과제명</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="과제명을 입력하세요" /></label>
             <div className="form-row">
               <label className="form-field"><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
-              <label className="form-field"><span>마감일</span><input type="date" value={calendar.selectedDate} onChange={(event) => calendar.setSelectedDate(event.target.value)} /></label>
+              <label className="form-field"><span>마감일</span><input type="date" value={calendar.selectedDate} onChange={(event) => calendar.selectDate(event.target.value)} /></label>
             </div>
             <label className="form-field"><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => setDueTime(event.target.value)} /></label>
             <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
