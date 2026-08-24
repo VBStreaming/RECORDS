@@ -195,24 +195,33 @@ function drawCalendarCard(
     const row = Math.floor(index / 7);
     const column = index % 7;
     const centerX = gridX + columnWidth * column + columnWidth / 2;
-    const centerY = gridY + rowHeight * row + rowHeight / 2;
+    const cellTop = gridY + rowHeight * row;
+    const dateY = cellTop + 28;
     const date = isoDate(calendar.year, calendar.month, day);
     const dateTasks = tasks.filter((task) => task.date === date);
     const selected = date === calendar.selectedDate;
     if (selected) {
       ctx.fillStyle = palette.accent;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 27, 0, Math.PI * 2);
+      ctx.arc(centerX, dateY - 7, 27, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.fillStyle = selected ? palette.selectedInk : palette.ink;
     ctx.font = `${selected ? "900" : "500"} 19px Roboto, system-ui, sans-serif`;
-    ctx.fillText(String(day), centerX, centerY + 7);
-    if (dateTasks.some((task) => !task.done)) {
-      ctx.fillStyle = selected ? palette.selectedInk : palette.accent;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY + 27, 3, 0, Math.PI * 2);
-      ctx.fill();
+    ctx.fillText(String(day), centerX, dateY);
+    dateTasks.slice(0, 2).forEach((task, taskIndex) => {
+      const taskY = cellTop + 50 + taskIndex * 24;
+      ctx.fillStyle = task.done ? palette.muted : task.color;
+      ctx.font = "700 10px Roboto, system-ui, sans-serif";
+      canvasText(ctx, task.subject, centerX, taskY, columnWidth - 8);
+      ctx.fillStyle = palette.muted;
+      ctx.font = "500 9px Roboto, system-ui, sans-serif";
+      canvasText(ctx, task.time, centerX, taskY + 12, columnWidth - 8);
+    });
+    if (dateTasks.length > 2) {
+      ctx.fillStyle = palette.muted;
+      ctx.font = "500 8px Roboto, system-ui, sans-serif";
+      canvasText(ctx, `+${dateTasks.length - 2}`, centerX, cellTop + rowHeight - 7, columnWidth - 8);
     }
   });
   ctx.textAlign = "left";
@@ -250,45 +259,9 @@ async function downloadCalendarImage(
 
   const cardX = landscape ? 56 : 48;
   const cardY = 148;
-  const cardWidth = landscape ? 930 : 904;
-  const cardHeight = landscape ? 730 : Math.min(640, designHeight - 650);
+  const cardWidth = landscape ? designWidth - 112 : 904;
+  const cardHeight = landscape ? 730 : Math.min(960, designHeight - 250);
   drawCalendarCard(ctx, calendar, tasks, cardX, cardY, cardWidth, cardHeight, palette);
-
-  const taskX = landscape ? 1040 : 48;
-  const taskY = landscape ? 148 : cardY + cardHeight + 42;
-  const taskWidth = landscape ? 504 : 904;
-  ctx.fillStyle = palette.muted;
-  ctx.font = "700 18px Roboto, system-ui, sans-serif";
-  ctx.fillText("SELECTED DAY", taskX, taskY + 28);
-  ctx.fillStyle = palette.ink;
-  ctx.font = "900 30px Roboto, system-ui, sans-serif";
-  ctx.fillText(`${Number(calendar.selectedDate.slice(5, 7))}월 ${Number(calendar.selectedDate.slice(8))}일의 과제`, taskX, taskY + 72);
-
-  const selectedTasks = tasks.filter((task) => task.date === calendar.selectedDate);
-  selectedTasks.slice(0, landscape ? 7 : 10).forEach((task, index) => {
-    const itemY = taskY + 110 + index * 82;
-    ctx.fillStyle = palette.card;
-    ctx.strokeStyle = palette.line;
-    ctx.beginPath();
-    ctx.roundRect(taskX, itemY, taskWidth, 66, 16);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = task.done ? palette.muted : task.color;
-    ctx.beginPath();
-    ctx.arc(taskX + 24, itemY + 33, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = palette.muted;
-    ctx.font = "700 14px Roboto, system-ui, sans-serif";
-    canvasText(ctx, task.subject, taskX + 48, itemY + 27, taskWidth - 68);
-    ctx.fillStyle = task.done ? palette.muted : palette.ink;
-    ctx.font = "700 17px Roboto, system-ui, sans-serif";
-    canvasText(ctx, `${task.title} · ${task.time}`, taskX + 48, itemY + 49, taskWidth - 68);
-  });
-  if (!selectedTasks.length) {
-    ctx.fillStyle = palette.muted;
-    ctx.font = "500 17px Roboto, system-ui, sans-serif";
-    ctx.fillText("이 날짜에는 과제가 없어요.", taskX, taskY + 126);
-  }
 
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("이미지를 저장할 수 없습니다.")), "image/png"));
   const url = URL.createObjectURL(blob);
