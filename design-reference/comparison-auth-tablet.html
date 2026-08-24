@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RECORDS Auth and Tablet QA</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 28px; color: #f4f2ec; background: #0c0d0f; font-family: system-ui, sans-serif; }
+      h1 { margin: 0 0 22px; font-size: 22px; } h1 span { color: #ff7a45; }
+      .board { display: grid; gap: 22px; align-items: start; }
+      .column, .mobile-pair { display: grid; gap: 22px; }
+      .source-row { display: grid; grid-template-columns: minmax(0, 1fr) 393px; gap: 22px; align-items: start; }
+      .mobile-pair { grid-template-columns: repeat(2, minmax(0, 393px)); }
+      section { overflow: hidden; border: 1px solid #292c30; border-radius: 18px; background: #151719; }
+      header { padding: 12px 15px; color: #94989b; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+      img { display: block; width: 100%; height: auto; }
+      .tablet img { width: 100%; }
+    </style>
+  </head>
+  <body>
+    <h1>RECORDS<span>.</span> — reference / auth / tablet / light mode</h1>
+    <main class="board">
+      <div class="source-row">
+        <section><header>SOURCE · PINTEREST DARK CALENDAR</header><img src="/design-reference/pinterest-dark-calendar-detail.png" alt="Pinterest dark calendar reference" /></section>
+        <section><header>SOURCE · ORIGINAL RECORDS MOBILE</header><img src="/design-reference/implementation-records-mobile.png" alt="Original Records mobile dashboard" /></section>
+      </div>
+      <div class="column">
+        <div class="mobile-pair">
+          <section><header>MOBILE · LOGIN DARK</header><img src="/design-reference/implementation-mobile-login-dark.png" alt="Mobile login dark" /></section>
+          <section><header>MOBILE · SIGNUP LIGHT</header><img src="/design-reference/implementation-mobile-signup-light.png" alt="Mobile signup light" /></section>
+        </div>
+        <section class="tablet"><header>TABLET · DASHBOARD LIGHT</header><img src="/design-reference/implementation-tablet-dashboard-light.png" alt="Tablet dashboard light" /></section>
+        <section class="tablet"><header>TABLET · SIGNUP DARK</header><img src="/design-reference/implementation-tablet-signup-dark.png" alt="Tablet signup dark" /></section>
+        <section class="tablet"><header>TABLET · QUICK ADD LIGHT</header><img src="/design-reference/implementation-tablet-add-light.png" alt="Tablet quick add light" /></section>
+      </div>
+    </main>
+  </body>
+</html>
