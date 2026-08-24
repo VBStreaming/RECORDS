@@ -1,5 +1,6 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:8001`).replace(/\/$/, "");
 const TOKEN_KEY = "records-access-token";
+const REFRESH_TOKEN_KEY = "records-refresh-token";
 const USER_CACHE_KEY = "records-offline-user";
 const ASSIGNMENTS_CACHE_KEY = "records-offline-assignments";
 const PENDING_KEY = "records-offline-pending";
@@ -66,12 +67,23 @@ function token() {
   return legacy;
 }
 
+function refreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+function saveTokens(result: { accessToken: string; refreshToken: string }) {
+  localStorage.setItem(TOKEN_KEY, result.accessToken);
+  localStorage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
 export function hasToken() {
   return Boolean(token());
 }
 
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_CACHE_KEY);
   localStorage.removeItem(ASSIGNMENTS_CACHE_KEY);
@@ -172,7 +184,32 @@ function optimisticAssignment(id: string, payload: AssignmentPayload, completed 
   return { id, ...payload, completed, completedAt: completed ? new Date().toISOString() : null, dayOffset: 0, deadlineLabel: "" };
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshAccessToken() {
+  const saved = refreshToken();
+  if (!saved) return false;
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: saved }),
+        signal: AbortSignal.timeout(30000),
+      });
+      const body = await response.json().catch(() => null) as { data?: { accessToken: string; refreshToken: string } } | null;
+      if (!response.ok || !body?.data?.accessToken || !body.data.refreshToken) return false;
+      saveTokens(body.data);
+      return true;
+    } catch {
+      return false;
+    }
+  })().finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const accessToken = token();
@@ -187,6 +224,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw error;
   }
   const body = await response.json().catch(() => null) as { data?: T; error?: ApiError } | null;
+  if (response.status === 401 && accessToken && retry && !path.startsWith("/auth/")) {
+    if (await refreshAccessToken()) return request<T>(path, init, false);
+  }
   if (response.status === 401 && accessToken) {
     clearToken();
     window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
@@ -198,12 +238,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function login(email: string, password: string) {
-  const result = await request<{ accessToken: string }>("/auth/login", {
+  const result = await request<{ accessToken: string; refreshToken: string }>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
-  localStorage.setItem(TOKEN_KEY, result.accessToken);
-  sessionStorage.removeItem(TOKEN_KEY);
+  saveTokens(result);
 }
 
 export async function signup(name: string, email: string, studentNumber: string, password: string) {

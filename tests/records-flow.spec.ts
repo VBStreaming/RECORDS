@@ -108,6 +108,49 @@ test("expired access token redirects to login on tablet and mobile", async ({ pa
   await expect(page.evaluate(() => localStorage.getItem("records-access-token"))).resolves.toBeNull();
 });
 
+test("expired access token rotates through refresh token before redirecting", async ({ page }) => {
+  let userRequests = 0;
+  let refreshRequests = 0;
+  await page.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/users/me") {
+      userRequests += 1;
+      if (userRequests === 1) {
+        await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: { code: "TOKEN_EXPIRED", message: "토큰이 만료되었습니다." } }) });
+      } else {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      }
+      return;
+    }
+    if (url.pathname === "/auth/refresh") {
+      refreshRequests += 1;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { accessToken: "rotated-access", refreshToken: "rotated-refresh" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [] }) });
+      return;
+    }
+    if (url.pathname.startsWith("/notifications")) {
+      const data = url.pathname.endsWith("unread-count") ? { count: 0 } : url.pathname.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem("records-access-token", "expired-access");
+    localStorage.setItem("records-refresh-token", "valid-refresh");
+  });
+
+  await page.goto("/?screen=dashboard");
+  await expect(page.getByText("마감 예정인 과제가 없어요", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("records-access-token"))).toBe("rotated-access");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("records-refresh-token"))).toBe("rotated-refresh");
+  expect(refreshRequests).toBe(1);
+  expect(userRequests).toBeGreaterThanOrEqual(2);
+});
+
 test("selected theme survives reload on tablet and mobile", async ({ page }) => {
   await page.goto("/?screen=login&theme=light");
   await page.goto("/?screen=login");
