@@ -13,3 +13,9 @@ web/dist/
 web/*.tsbuildinfo
 web/vite.config.js
 web/vite.config.d.ts
+node_modules/
+dist/
+test-results/
+playwright-report/
+.env.*
+삼각함수 수행평가 준비.png
