@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 test("responsive signup, calendar, task edit and dashboard flows work", async ({ page }) => {
@@ -133,6 +134,26 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
 
   await expect(page.locator(".calendar-card").getByRole("heading", { name: `${nextYear}. ${nextMonth}` })).toBeVisible();
   await expect(page.getByRole("heading", { name: "다음 달 과제" })).toBeVisible();
+  const imagePresets = [
+    ["스마트폰 비율 (세로)로 저장", 1080, 1920],
+    ["태블릿 비율 (가로)로 저장", 2560, 1600],
+    ["태블릿 비율 (세로)로 저장", 1600, 2560],
+  ] as const;
+  for (const [index, [label, width, height]] of imagePresets.entries()) {
+    await page.getByRole("button", { name: "배경화면으로 저장" }).click();
+    await expect(page.getByRole("dialog", { name: "캘린더 이미지 저장" })).toBeVisible();
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: label }).click();
+    const imageDownload = await download;
+    expect(imageDownload.suggestedFilename()).toContain("records-calendar-");
+    const imagePath = await imageDownload.path();
+    expect(imagePath).not.toBeNull();
+    const png = readFileSync(imagePath!);
+    expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    expect(png.readUInt32BE(16)).toBe(width);
+    expect(png.readUInt32BE(20)).toBe(height);
+    if (index === imagePresets.length - 1) break;
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?screen=dashboard&theme=light");
   await expect(page.locator(".flow-stack")).toBeVisible();

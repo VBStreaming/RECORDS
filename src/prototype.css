@@ -893,6 +893,56 @@ button {
   background: #2d3033;
 }
 
+.calendar-save-options {
+  display: grid;
+  gap: 14px;
+}
+
+.calendar-save-options > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.calendar-save-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendar-save-option {
+  display: grid;
+  min-height: 78px;
+  gap: 8px;
+  align-content: center;
+  padding: 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  text-align: center;
+}
+
+.calendar-save-option:hover,
+.calendar-save-option:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.calendar-save-option:disabled {
+  opacity: .6;
+}
+
+.calendar-save-option strong {
+  font-size: 11px;
+}
+
+.calendar-save-option small,
+.calendar-save-status {
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .device-screen[data-theme="dark"] .status-bar {
   color: #f6f4ef;
 }

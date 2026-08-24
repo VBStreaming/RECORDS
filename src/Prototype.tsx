@@ -87,6 +87,13 @@ type Task = {
   color: string;
 };
 
+type CalendarImagePreset = {
+  id: "phone" | "tablet-landscape" | "tablet-portrait";
+  label: string;
+  width: number;
+  height: number;
+};
+
 const initialTasks: Task[] = [];
 
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
@@ -97,6 +104,12 @@ const colors: Record<string, string> = {
   과학: "#55c9a5",
   한국사: "#d98bff",
 };
+
+const calendarImagePresets: CalendarImagePreset[] = [
+  { id: "phone", label: "스마트폰 비율 (세로)", width: 1080, height: 1920 },
+  { id: "tablet-landscape", label: "태블릿 비율 (가로)", width: 2560, height: 1600 },
+  { id: "tablet-portrait", label: "태블릿 비율 (세로)", width: 1600, height: 2560 },
+];
 
 const ThemeContext = createContext<{ theme: Theme; toggleTheme: () => void } | null>(null);
 const THEME_KEY = "records-theme";
@@ -131,6 +144,176 @@ function taskFromAssignment(assignment: Assignment): Task {
   const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(dueAt);
   const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(dueAt);
   return { id: assignment.id, title: assignment.title, subject: assignment.subject, date, time, done: assignment.completed, color: colors[assignment.subject] || "#7c8cff" };
+}
+
+function canvasText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
+  let value = text;
+  while (value.length > 1 && ctx.measureText(value).width > maxWidth) value = `${value.slice(0, -2)}…`;
+  ctx.fillText(value, x, y);
+}
+
+function drawCalendarCard(
+  ctx: CanvasRenderingContext2D,
+  calendar: ReturnType<typeof useCalendar>,
+  tasks: Task[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  palette: { ink: string; muted: string; card: string; line: string; accent: string; selectedInk: string },
+) {
+  ctx.fillStyle = palette.card;
+  ctx.strokeStyle = palette.line;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, 28);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = palette.muted;
+  ctx.font = "700 18px Roboto, system-ui, sans-serif";
+  ctx.fillText("MONTHLY", x + 34, y + 48);
+  ctx.fillStyle = palette.ink;
+  ctx.font = "900 36px Roboto, system-ui, sans-serif";
+  ctx.fillText(`${calendar.year}. ${String(calendar.month + 1).padStart(2, "0")}`, x + 34, y + 92);
+
+  const gridX = x + 28;
+  const gridY = y + 142;
+  const gridWidth = width - 56;
+  const columnWidth = gridWidth / 7;
+  const rows = Math.ceil(calendar.cells.length / 7);
+  const rowHeight = (height - 170) / rows;
+  ctx.fillStyle = palette.muted;
+  ctx.font = "700 16px Roboto, system-ui, sans-serif";
+  weekdays.forEach((weekday, index) => {
+    ctx.textAlign = "center";
+    ctx.fillText(weekday, gridX + columnWidth * index + columnWidth / 2, gridY - 22);
+  });
+
+  calendar.cells.forEach((day, index) => {
+    if (!day) return;
+    const row = Math.floor(index / 7);
+    const column = index % 7;
+    const centerX = gridX + columnWidth * column + columnWidth / 2;
+    const centerY = gridY + rowHeight * row + rowHeight / 2;
+    const date = isoDate(calendar.year, calendar.month, day);
+    const dateTasks = tasks.filter((task) => task.date === date);
+    const selected = date === calendar.selectedDate;
+    if (selected) {
+      ctx.fillStyle = palette.accent;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 27, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = selected ? palette.selectedInk : palette.ink;
+    ctx.font = `${selected ? "900" : "500"} 19px Roboto, system-ui, sans-serif`;
+    ctx.fillText(String(day), centerX, centerY + 7);
+    if (dateTasks.some((task) => !task.done)) {
+      ctx.fillStyle = selected ? palette.selectedInk : palette.accent;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY + 27, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  ctx.textAlign = "left";
+}
+
+async function downloadCalendarImage(
+  calendar: ReturnType<typeof useCalendar>,
+  tasks: Task[],
+  theme: Theme,
+  preset: CalendarImagePreset,
+) {
+  const canvas = document.createElement("canvas");
+  canvas.width = preset.width;
+  canvas.height = preset.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("이미지를 생성할 수 없습니다.");
+
+  const palette = theme === "dark"
+    ? { background: "#0f1113", ink: "#f6f4ef", muted: "#898d90", card: "#17191b", line: "#2a2d30", accent: "#ff7a45", selectedInk: "#17191b" }
+    : { background: "#f4f1eb", ink: "#1b1d1f", muted: "#74787a", card: "#fffefa", line: "#ddd8cf", accent: "#f56f3d", selectedInk: "#fffefa" };
+  const landscape = preset.width > preset.height;
+  const designWidth = landscape ? 1600 : 1000;
+  const scale = preset.width / designWidth;
+  const designHeight = preset.height / scale;
+  ctx.scale(scale, scale);
+  ctx.fillStyle = palette.background;
+  ctx.fillRect(0, 0, designWidth, designHeight);
+
+  ctx.fillStyle = palette.muted;
+  ctx.font = "700 16px Roboto, system-ui, sans-serif";
+  ctx.fillText("ASSIGNMENT PLANNER", 56, 58);
+  ctx.fillStyle = palette.ink;
+  ctx.font = "900 42px Roboto, system-ui, sans-serif";
+  ctx.fillText("RECORDS.", 56, 108);
+
+  const cardX = landscape ? 56 : 48;
+  const cardY = 148;
+  const cardWidth = landscape ? 930 : 904;
+  const cardHeight = landscape ? 730 : Math.min(640, designHeight - 650);
+  drawCalendarCard(ctx, calendar, tasks, cardX, cardY, cardWidth, cardHeight, palette);
+
+  const taskX = landscape ? 1040 : 48;
+  const taskY = landscape ? 148 : cardY + cardHeight + 42;
+  const taskWidth = landscape ? 504 : 904;
+  ctx.fillStyle = palette.muted;
+  ctx.font = "700 18px Roboto, system-ui, sans-serif";
+  ctx.fillText("SELECTED DAY", taskX, taskY + 28);
+  ctx.fillStyle = palette.ink;
+  ctx.font = "900 30px Roboto, system-ui, sans-serif";
+  ctx.fillText(`${Number(calendar.selectedDate.slice(5, 7))}월 ${Number(calendar.selectedDate.slice(8))}일의 과제`, taskX, taskY + 72);
+
+  const selectedTasks = tasks.filter((task) => task.date === calendar.selectedDate);
+  selectedTasks.slice(0, landscape ? 7 : 10).forEach((task, index) => {
+    const itemY = taskY + 110 + index * 82;
+    ctx.fillStyle = palette.card;
+    ctx.strokeStyle = palette.line;
+    ctx.beginPath();
+    ctx.roundRect(taskX, itemY, taskWidth, 66, 16);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = task.done ? palette.muted : task.color;
+    ctx.beginPath();
+    ctx.arc(taskX + 24, itemY + 33, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = palette.muted;
+    ctx.font = "700 14px Roboto, system-ui, sans-serif";
+    canvasText(ctx, task.subject, taskX + 48, itemY + 27, taskWidth - 68);
+    ctx.fillStyle = task.done ? palette.muted : palette.ink;
+    ctx.font = "700 17px Roboto, system-ui, sans-serif";
+    canvasText(ctx, `${task.title} · ${task.time}`, taskX + 48, itemY + 49, taskWidth - 68);
+  });
+  if (!selectedTasks.length) {
+    ctx.fillStyle = palette.muted;
+    ctx.font = "500 17px Roboto, system-ui, sans-serif";
+    ctx.fillText("이 날짜에는 과제가 없어요.", taskX, taskY + 126);
+  }
+
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("이미지를 저장할 수 없습니다.")), "image/png"));
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `records-calendar-${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}-${preset.id}.png`;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function CalendarSaveOptions({ onSelect, busy }: { onSelect: (preset: CalendarImagePreset) => void; busy: boolean }) {
+  return (
+    <div className="calendar-save-options">
+      <p>저장할 배경화면 비율을 선택하세요.</p>
+      <div className="calendar-save-grid">
+        {calendarImagePresets.map((preset) => (
+          <button key={preset.id} className="calendar-save-option" onClick={() => onSelect(preset)} disabled={busy} aria-label={`${preset.label}로 저장`}>
+            <strong>{preset.label}</strong>
+            <small>{preset.width} × {preset.height}</small>
+          </button>
+        ))}
+      </div>
+      {busy ? <small className="calendar-save-status">이미지 생성 중...</small> : null}
+    </div>
+  );
 }
 
 function taskProgress(tasks: Task[]) {
@@ -591,6 +774,8 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [portalReady, setPortalReady] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
+  const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
   const [dueTime, setDueTime] = useState("18:00");
@@ -602,6 +787,18 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
   const deadline = deadlineSummary(tasks);
+
+  const saveCalendarImage = async (preset: CalendarImagePreset) => {
+    setCalendarSaveBusy(true);
+    try {
+      await downloadCalendarImage(calendar, tasks, theme, preset);
+      setCalendarSaveOpen(false);
+    } catch (saveError) {
+      setError(apiErrorMessage(saveError));
+    } finally {
+      setCalendarSaveBusy(false);
+    }
+  };
 
   useEffect(() => setPortalReady(true), []);
 
@@ -700,7 +897,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         <main className="records" aria-label="과제 디데이 대시보드">
           <header className="topbar">
             <div><p className="eyebrow">ASSIGNMENT PLANNER</p><Brand /></div>
-            <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={onLogout} aria-label="로그아웃"><ExitIcon /></button></div>
+            <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={onLogout} aria-label="로그아웃"><ExitIcon /></button></div>
           </header>
           <OfflineBadge online={online} />
           <section className="deadline-card" aria-label="가장 가까운 마감">
@@ -745,6 +942,9 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
           </div>
         ) : null}
+      </BottomSheet>
+      <BottomSheet open={calendarSaveOpen} onOpenChange={setCalendarSaveOpen} title="캘린더 이미지 저장" description="기기 배경화면에 맞는 비율을 선택하세요." snap={0.5}>
+        <CalendarSaveOptions onSelect={(preset) => void saveCalendarImage(preset)} busy={calendarSaveBusy} />
       </BottomSheet>
     </>
   );
@@ -838,11 +1038,14 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
 }
 
 function TabletDashboard({ onLogout }: { onLogout: () => void }) {
+  const { theme } = useTheme();
   const [view, setView] = useState<"dashboard" | "calendar">("dashboard");
   const online = useOnlineStatus();
   const [tasks, setTasks] = useState(initialTasks);
   const [profile, setProfile] = useState<User | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
+  const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
@@ -854,6 +1057,18 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
   const deadline = deadlineSummary(tasks);
+
+  const saveCalendarImage = async (preset: CalendarImagePreset) => {
+    setCalendarSaveBusy(true);
+    try {
+      await downloadCalendarImage(calendar, tasks, theme, preset);
+      setCalendarSaveOpen(false);
+    } catch (saveError) {
+      setError(apiErrorMessage(saveError));
+    } finally {
+      setCalendarSaveBusy(false);
+    }
+  };
   useEffect(() => {
     if (!hasToken()) return;
     const [from, to] = monthRange(calendar.year, calendar.month);
@@ -948,7 +1163,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
       </aside>
       <section className="tablet-content">
-        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "MONTHLY CALENDAR" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="tablet-photo" onClick={() => setAddOpen(true)}><CameraIcon />사진으로 추가</button></div></header>
+        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "MONTHLY CALENDAR" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => setAddOpen(true)}><CameraIcon />사진으로 추가</button></div></header>
         {view === "dashboard" ? (
           <div className="tablet-grid">
             <div className="tablet-left">
@@ -990,6 +1205,12 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
               <label className="form-field"><span>마감 시간</span><input type="time" value={editingTask.time} onChange={(event) => setEditingTask((task) => task ? { ...task, time: event.target.value } : task)} /></label>
             </div>
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
+          </TabletModal>
+        ) : null}
+        {calendarSaveOpen ? (
+          <TabletModal key="calendar-save" label="캘린더 이미지 저장">
+            <header><div><p className="section-label">SAVE CALENDAR</p><h2>캘린더 이미지 저장</h2></div><button onClick={() => setCalendarSaveOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
+            <CalendarSaveOptions onSelect={(preset) => void saveCalendarImage(preset)} busy={calendarSaveBusy} />
           </TabletModal>
         ) : null}
       </AnimatePresence>
