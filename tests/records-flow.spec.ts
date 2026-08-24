@@ -17,7 +17,9 @@ test("responsive signup, calendar, task edit and dashboard flows work", async ({
   await page.getByRole("button", { name: "다음 달" }).click();
   await expect(page.locator(".calendar-card.expanded").getByRole("heading", { name: "2026. 09" })).toBeVisible();
   await page.getByRole("button", { name: "이전 달" }).click();
-  await page.getByRole("button", { name: "8월 24일" }).click();
+  const todayParts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).formatToParts(new Date());
+  const today = `${todayParts.find((part) => part.type === "month")?.value}월 ${todayParts.find((part) => part.type === "day")?.value}일`;
+  await page.getByRole("button", { name: today }).click();
   await page.getByRole("button", { name: "대시보드" }).click();
   await page.getByRole("button", { name: "사진으로 추가" }).click();
   const modalLayout = await page.evaluate(() => {
