@@ -162,6 +162,7 @@ test("selected theme survives reload on tablet and mobile", async ({ page }) => 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await expect(page.locator(".app-screen")).toHaveClass(/theme-dark/);
+  await expect.poll(() => page.locator(".app-screen").evaluate((element) => getComputedStyle(element).transitionProperty)).toContain("background-color");
   await page.getByRole("button", { name: "화이트 모드로 전환" }).click();
   await page.reload();
   await expect(page.locator(".app-screen")).toHaveClass(/theme-light/);

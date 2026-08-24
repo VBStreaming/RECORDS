@@ -91,7 +91,9 @@ body {
 }
 
 html:has(.tablet-app.theme-light),
-body:has(.tablet-app.theme-light) {
+body:has(.tablet-app.theme-light),
+html:has(.device-screen[data-theme="light"]),
+body:has(.device-screen[data-theme="light"]) {
   background: #f4f1eb;
 }
 
@@ -100,7 +102,11 @@ body,
 .tablet-app,
 .tablet-app *,
 .tablet-app *::before,
-.tablet-app *::after {
+.tablet-app *::after,
+.device-screen,
+.device-screen *,
+.device-screen *::before,
+.device-screen *::after {
   transition: background-color 220ms ease, color 180ms ease, border-color 220ms ease, box-shadow 220ms ease;
 }
 
