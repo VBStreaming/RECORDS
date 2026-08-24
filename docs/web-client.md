@@ -13,7 +13,7 @@
 - 사용자가 명시적으로 요청한 사진 자동 추출 결과를 수정한 뒤 과제 저장
 - 데스크톱과 모바일 레이아웃, 라이트·다크 테마
 
-과제 수정·삭제 화면, refresh token, 소셜 로그인, 오프라인 동기화는 현재 범위가 아니다.
+소셜 로그인은 현재 범위가 아니다. 과제 수정·삭제, 오프라인 동기화, refresh token rotation을 포함한다.
 
 ## 로컬 실행
 
@@ -41,7 +41,7 @@ Vite 개발 서버는 `/api` 요청을 `http://127.0.0.1:8000`으로 전달한�
 ## API 연결 원칙
 
 - 성공·오류 응답은 `docs/api-response.md`의 envelope를 해석한다.
-- access token은 `sessionStorage`에 저장해 탭을 닫으면 제거한다.
+- access token과 refresh token은 `localStorage`에 저장한다. access token이 만료되면 refresh token rotation 후 원래 요청을 한 번 재시도한다.
 - 인증된 사용자 ID는 token에서만 결정하며 웹 요청에 `user_id`를 넣지 않는다.
 - 사진 선택만으로 OpenAI API를 호출하지 않는다. `사진에서 과제 찾기` 버튼을 눌렀을 때만 `POST /assignment-extractions`를 호출한다.
 - 추출 결과는 자동 저장하지 않는다. 사용자가 제목·과목·마감일을 확인한 뒤 기존 `POST /assignments`로 저장한다.

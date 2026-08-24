@@ -2,7 +2,7 @@
 
 상태: **구현 완료**
 
-이 문서는 최초 인증 기능의 고정 계약이다. 범위는 가입, 로그인, 현재 사용자 조회이며 Refresh Token, 이메일 인증, 비밀번호 재설정은 포함하지 않는다.
+이 문서는 인증 기능의 고정 계약이다. 범위는 가입, 로그인, Refresh Token Rotation, 현재 사용자 조회이며 이메일 인증과 비밀번호 재설정은 포함하지 않는다.
 
 모든 JSON 응답은 [`api-response.md`](api-response.md)의 공통 envelope를 사용한다. 아래 성공 예시는 전체 응답의 `data`에 들어가는 payload만 표시한다.
 
@@ -77,12 +77,24 @@
 ```json
 {
   "accessToken": "<signed-jwt>",
+  "refreshToken": "<signed-jwt>",
   "tokenType": "bearer",
-  "expiresIn": 1800
+  "expiresIn": 1800,
+  "refreshExpiresIn": 1209600
 }
 ```
 
 존재하지 않는 이메일과 잘못된 비밀번호는 모두 같은 `401 INVALID_CREDENTIALS`를 반환한다. 계정 존재 여부와 어느 필드가 틀렸는지 노출하지 않는다.
+
+### `POST /auth/refresh`
+
+요청:
+
+```json
+{ "refreshToken": "<refresh-jwt>" }
+```
+
+성공 시 새 access token과 새 refresh token을 반환한다. 사용한 refresh token은 즉시 폐기되며 같은 토큰을 다시 사용하면 `401 INVALID_TOKEN`을 반환한다.
 
 ### `GET /users/me`
 
@@ -113,8 +125,9 @@ Authorization: Bearer <access-token>
 - JWT algorithm은 `HS256`이다.
 - `JWT_SECRET_KEY`는 최소 32 random bytes이며 `.env`와 운영 secret으로만 제공한다.
 - Access Token 만료는 30분이다.
-- payload에는 `sub`, `iat`, `exp`만 넣는다.
+- payload에는 `sub`, `jti`, `iat`, `exp`, `tokenType`을 넣는다.
 - `sub`는 사용자 UUID 문자열이다. 이름, 이메일, 학번은 넣지 않는다.
+- refresh token의 `jti`는 DB에 저장하고 rotation 시 일회성으로 소비한다.
 
 ## 최소 파일 변경
 
@@ -141,6 +154,7 @@ service·repository·JWT provider interface는 만들지 않는다.
 | 학번 중복 | 가입 허용 |
 | 잘못된 학번·짧은 비밀번호 | `422` |
 | 정상 로그인 | 30분 Access Token 발급 |
+| refresh token rotation | 새 토큰 발급, 기존 refresh token 재사용은 `401` |
 | 없는 이메일·틀린 비밀번호 | 동일한 `401` 응답 |
 | 정상 token으로 `/users/me` | 자신의 정보 반환 |
 | token 없음·위조·만료 | `401 INVALID_TOKEN` |

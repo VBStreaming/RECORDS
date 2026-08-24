@@ -12,7 +12,7 @@ RECORDS는 FastAPI 단일 백엔드와 반응형 React 웹으로 시작한다. �
 4. 사진에서 과제 후보 자동 추출
 5. 웹에서 인증·과제·사진 추출 API 연결
 
-사진 자동 추출은 사용자가 결과를 확인·수정한 뒤 기존 과제 생성 API로 저장하는 흐름까지만 구현한다. 이메일 인증, Refresh Token, 푸시 알림, 관리자 기능, 마이크로서비스는 현재 범위가 아니다. 요구 없이 미리 추가하지 않는다.
+사진 자동 추출은 사용자가 결과를 확인·수정한 뒤 기존 과제 생성 API로 저장하는 흐름까지만 구현한다. 이메일 인증, 푸시 알림, 관리자 기능, 마이크로서비스는 현재 범위가 아니다. Refresh Token Rotation은 인증 세션 유지를 위해 구현한다.
 
 ## 작업 전 읽을 문서
 
@@ -38,7 +38,7 @@ RECORDS는 FastAPI 단일 백엔드와 반응형 React 웹으로 시작한다. �
 - 현재 규모에서는 service, repository, interface 계층을 만들지 않는다. 중복되거나 분리할 실제 이유가 생길 때만 추출한다.
 - 사용자 ID는 인증 토큰에서 얻는다. 요청 body나 query의 `user_id`를 신뢰하지 않는다.
 - 웹은 `web/`의 Vite·React·TypeScript를 사용하고, 별도 상태 관리·라우팅 라이브러리는 실제 필요가 생기기 전까지 추가하지 않는다.
-- 웹 access token은 탭 단위 `sessionStorage`에만 저장한다. 장기 로그인이나 refresh token은 현재 범위가 아니다.
+- 웹 access token과 refresh token은 `localStorage`에 저장하고, access token 만료 시 refresh token rotation으로 자동 재발급한다.
 
 ## 개발 순서
 
