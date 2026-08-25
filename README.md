@@ -11,6 +11,7 @@ FastAPI API and responsive React web client for the RECORDS assignment manager.
 - [Assignment API and data contract](docs/assignments.md)
 - [Photo assignment extraction contract](docs/photo-extraction.md)
 - [Web client and API connection](docs/web-client.md)
+- [Developer handoff and current issues](docs/developer-handoff.md)
 - [Local setup for a new developer](docs/local-setup.md)
 - [Agent development rules](AGENTS.md)
 
