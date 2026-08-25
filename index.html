@@ -16,7 +16,17 @@
     <div id="root"></div>
     <script>
       if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => undefined));
+        window.addEventListener("load", () => {
+          const firebaseConfig = {
+            apiKey: "%VITE_FIREBASE_API_KEY%",
+            projectId: "%VITE_FIREBASE_PROJECT_ID%",
+            messagingSenderId: "%VITE_FIREBASE_MESSAGING_SENDER_ID%",
+            appId: "%VITE_FIREBASE_APP_ID%",
+          };
+          const configured = Object.values(firebaseConfig).every((value) => value && !value.startsWith("%"));
+          const query = configured ? `?${new URLSearchParams(firebaseConfig)}` : "";
+          navigator.serviceWorker.register(`/sw.js${query}`).catch(() => undefined);
+        });
       }
     </script>
     <script type="module" src="/src/main.tsx"></script>
