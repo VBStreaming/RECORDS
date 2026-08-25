@@ -62,6 +62,7 @@ import {
   getNotificationPreferences,
   unreadNotificationCount,
   updateNotificationPreferences,
+  registerPushToken,
   updateAssignment,
   AUTH_EXPIRED_EVENT,
   CONNECTION_STATUS_EVENT,
@@ -70,6 +71,7 @@ import {
   type NotificationPreferences,
   type User,
 } from "./recordsApi";
+import { enableFirebasePush, listenForFirebaseMessages, type PushMessage } from "./firebaseMessaging";
 
 type Theme = "dark" | "light";
 type AuthMode = "login" | "signup";
@@ -477,9 +479,22 @@ function NotificationBell() {
     };
   }, [refresh]);
 
+  useEffect(() => listenForFirebaseMessages((payload: PushMessage) => {
+    const data = payload.data || {};
+    if (data.notificationId) seen.current.add(data.notificationId);
+    if (window.isSecureContext && "Notification" in window && window.Notification.permission === "granted" && data.title) {
+      new window.Notification(data.title, { body: data.message });
+    }
+    void refresh();
+  }), [refresh]);
+
   const enableBrowserNotifications = async () => {
     if (!("Notification" in window) || !window.isSecureContext) return;
-    setPermission(await window.Notification.requestPermission());
+    try {
+      setPermission(await enableFirebasePush(registerPushToken));
+    } catch {
+      setPermission(await window.Notification.requestPermission());
+    }
   };
 
   const read = async (item: AppNotification) => {
