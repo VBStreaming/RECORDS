@@ -6,6 +6,7 @@ const ASSIGNMENTS_CACHE_KEY = "records-offline-assignments";
 const PENDING_KEY = "records-offline-pending";
 const NOTIFICATIONS_CACHE_KEY = "records-offline-notifications";
 const NOTIFICATION_PREFERENCE_CACHE_KEY = "records-notification-preference";
+const REFRESH_LOCK_KEY = "records-refresh-lock";
 export const AUTH_EXPIRED_EVENT = "records:auth-expired";
 export const OFFLINE_SYNC_EVENT = "records:offline-sync";
 export const CONNECTION_STATUS_EVENT = "records:connection-status";
@@ -186,11 +187,22 @@ function optimisticAssignment(id: string, payload: AssignmentPayload, completed 
 
 let refreshInFlight: Promise<boolean> | null = null;
 
-async function refreshAccessToken() {
-  const saved = refreshToken();
+type BrowserLockManager = { request(name: string, callback: () => Promise<boolean>): Promise<boolean> };
+
+function withRefreshLock(expectedRefreshToken: string, action: () => Promise<boolean>) {
+  const locks = (navigator as Navigator & { locks?: BrowserLockManager }).locks;
+  return locks
+    ? locks.request(REFRESH_LOCK_KEY, async () => refreshToken() === expectedRefreshToken ? action() : true)
+    : action();
+}
+
+async function refreshAccessToken(expectedRefreshToken: string | null = refreshToken()) {
+  const saved = expectedRefreshToken;
   if (!saved) return false;
+  if (refreshToken() !== saved) return true;
   if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
+  const refresh = async () => {
+    if (refreshToken() !== saved) return true;
     try {
       const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: "POST",
@@ -199,13 +211,15 @@ async function refreshAccessToken() {
         signal: AbortSignal.timeout(30000),
       });
       const body = await response.json().catch(() => null) as { data?: { accessToken: string; refreshToken: string } } | null;
-      if (!response.ok || !body?.data?.accessToken || !body.data.refreshToken) return false;
+      if (!response.ok || !body?.data?.accessToken || !body.data.refreshToken) return refreshToken() !== saved;
+      if (refreshToken() !== saved) return true;
       saveTokens(body.data);
       return true;
     } catch {
       return false;
     }
-  })().finally(() => { refreshInFlight = null; });
+  };
+  refreshInFlight = withRefreshLock(saved, refresh).finally(() => { refreshInFlight = null; });
   return refreshInFlight;
 }
 
@@ -213,6 +227,7 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const accessToken = token();
+  const refreshTokenAtRequest = refreshToken();
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
   let response: Response;
@@ -225,11 +240,13 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   }
   const body = await response.json().catch(() => null) as { data?: T; error?: ApiError } | null;
   if (response.status === 401 && accessToken && retry && !path.startsWith("/auth/")) {
-    if (await refreshAccessToken()) return request<T>(path, init, false);
+    if (await refreshAccessToken(refreshTokenAtRequest)) return request<T>(path, init, false);
   }
   if (response.status === 401 && accessToken) {
-    clearToken();
-    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    if (token() === accessToken && refreshToken() === refreshTokenAtRequest) {
+      clearToken();
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    }
   }
   if (!response.ok || !body?.data && body?.error) {
     throw new RecordsApiError(body?.error?.message || `요청에 실패했습니다. (${response.status})`, body?.error);

@@ -223,6 +223,53 @@ test("expired access token rotates through refresh token before redirecting", as
   expect(userRequests).toBeGreaterThanOrEqual(2);
 });
 
+test("cross-tab refresh uses one rotation request and keeps the session", async ({ browser }) => {
+  const context = await browser.newContext();
+  const first = await context.newPage();
+  const second = await context.newPage();
+  let userRequests = 0;
+  let refreshRequests = 0;
+  let releaseUserRequests!: () => void;
+  const bothUserRequests = new Promise<void>((resolve) => { releaseUserRequests = resolve; });
+  await context.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/users/me") {
+      if (request.headers().authorization === "Bearer rotated-access") {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      } else {
+        userRequests += 1;
+        if (userRequests === 2) releaseUserRequests();
+        await bothUserRequests;
+        await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: { code: "TOKEN_EXPIRED", message: "토큰이 만료되었습니다." } }) });
+      }
+      return;
+    }
+    if (url.pathname === "/auth/refresh") {
+      refreshRequests += 1;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { accessToken: "rotated-access", refreshToken: "rotated-refresh" } }) });
+      return;
+    }
+    await route.continue();
+  });
+  await context.addInitScript(() => {
+    localStorage.setItem("records-access-token", "expired-access");
+    localStorage.setItem("records-refresh-token", "shared-refresh");
+  });
+  await first.goto("/?screen=signup");
+  await second.goto("/?screen=signup");
+
+  await Promise.all([
+    first.evaluate(() => import("/src/recordsApi.ts").then(({ me }) => me())),
+    second.evaluate(() => import("/src/recordsApi.ts").then(({ me }) => me())),
+  ]);
+
+  expect(refreshRequests).toBe(1);
+  await expect.poll(() => first.evaluate(() => localStorage.getItem("records-access-token"))).toBe("rotated-access");
+  await expect.poll(() => second.evaluate(() => localStorage.getItem("records-refresh-token"))).toBe("rotated-refresh");
+  await context.close();
+});
+
 test("selected theme survives reload on tablet and mobile", async ({ page }) => {
   await page.goto("/?screen=login&theme=light");
   await page.goto("/?screen=login");
