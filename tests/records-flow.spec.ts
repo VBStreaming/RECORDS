@@ -270,6 +270,98 @@ test("cross-tab refresh uses one rotation request and keeps the session", async 
   await context.close();
 });
 
+test("temporary refresh outage preserves the session and offline queue", async ({ page }) => {
+  await page.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/users/me") {
+      await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: { code: "TOKEN_EXPIRED", message: "토큰이 만료되었습니다." } }) });
+      return;
+    }
+    if (url.pathname === "/auth/refresh") {
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "SERVICE_UNAVAILABLE", message: "잠시 후 다시 시도해 주세요." } }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem("records-access-token", "expired-access");
+    localStorage.setItem("records-refresh-token", "saved-refresh");
+    localStorage.setItem("records-offline-pending", JSON.stringify([{ key: "pending-1", type: "create", assignmentId: "offline-1", payload: { title: "보존 과제", subject: "자율", dueAt: "2026-08-30T18:00:00+09:00" } }]));
+  });
+  await page.goto("/?screen=signup");
+
+  const result = await page.evaluate(async () => {
+    let expired = false;
+    window.addEventListener("records:auth-expired", () => { expired = true; }, { once: true });
+    let errorName = "";
+    try {
+      await import("/src/recordsApi.ts").then(({ me }) => me());
+    } catch (error) {
+      errorName = error instanceof Error ? error.name : "unknown";
+    }
+    return {
+      errorName,
+      expired,
+      accessToken: localStorage.getItem("records-access-token"),
+      refreshToken: localStorage.getItem("records-refresh-token"),
+      pending: JSON.parse(localStorage.getItem("records-offline-pending") || "[]").length,
+    };
+  });
+
+  expect(result).toEqual({
+    errorName: "NetworkError",
+    expired: false,
+    accessToken: "expired-access",
+    refreshToken: "saved-refresh",
+    pending: 1,
+  });
+});
+
+test("offline sync keeps operations queued while a request is in flight", async ({ page }) => {
+  let assignmentRequests = 0;
+  let releaseFirstRequest!: () => void;
+  let markFirstRequest!: () => void;
+  const firstRequest = new Promise<void>((resolve) => { markFirstRequest = resolve; });
+  const release = new Promise<void>((resolve) => { releaseFirstRequest = resolve; });
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/assignments" && request.method() === "POST") {
+      assignmentRequests += 1;
+      if (assignmentRequests === 1) {
+        markFirstRequest();
+        await release;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { id: `server-${assignmentRequests}`, title: `과제 ${assignmentRequests}`, subject: "자율", dueAt: "2026-08-30T09:00:00Z", completed: false, completedAt: null, dayOffset: 1, deadlineLabel: "D-1" } }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem("records-access-token", "test-access");
+    localStorage.setItem("records-refresh-token", "test-refresh");
+    localStorage.setItem("records-offline-pending", JSON.stringify([{ key: "first", type: "create", assignmentId: "offline-first", payload: { title: "과제 1", subject: "자율", dueAt: "2026-08-30T18:00:00+09:00" } }]));
+  });
+  await page.goto("/?screen=signup");
+
+  const syncing = page.evaluate(() => import("/src/recordsApi.ts").then(({ syncPendingAssignments }) => syncPendingAssignments()));
+  await firstRequest;
+  await page.evaluate(() => {
+    const pending = JSON.parse(localStorage.getItem("records-offline-pending") || "[]");
+    pending.push({ key: "second", type: "create", assignmentId: "offline-second", payload: { title: "과제 2", subject: "자율", dueAt: "2026-08-31T18:00:00+09:00" } });
+    localStorage.setItem("records-offline-pending", JSON.stringify(pending));
+  });
+  releaseFirstRequest();
+  await syncing;
+
+  expect(assignmentRequests).toBe(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("records-offline-pending") || "[]").length)).toBe(0);
+});
+
 test("selected theme survives reload on tablet and mobile", async ({ page }) => {
   await page.goto("/?screen=login&theme=light");
   await page.goto("/?screen=login");

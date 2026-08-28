@@ -185,24 +185,26 @@ function optimisticAssignment(id: string, payload: AssignmentPayload, completed 
   return { id, ...payload, completed, completedAt: completed ? new Date().toISOString() : null, dayOffset: 0, deadlineLabel: "" };
 }
 
-let refreshInFlight: Promise<boolean> | null = null;
+type RefreshResult = "refreshed" | "invalid" | "unavailable";
 
-type BrowserLockManager = { request(name: string, callback: () => Promise<boolean>): Promise<boolean> };
+let refreshInFlight: Promise<RefreshResult> | null = null;
 
-function withRefreshLock(expectedRefreshToken: string, action: () => Promise<boolean>) {
+type BrowserLockManager = { request(name: string, callback: () => Promise<RefreshResult>): Promise<RefreshResult> };
+
+function withRefreshLock(expectedRefreshToken: string, action: () => Promise<RefreshResult>) {
   const locks = (navigator as Navigator & { locks?: BrowserLockManager }).locks;
   return locks
-    ? locks.request(REFRESH_LOCK_KEY, async () => refreshToken() === expectedRefreshToken ? action() : true)
+    ? locks.request(REFRESH_LOCK_KEY, async () => refreshToken() === expectedRefreshToken ? action() : "refreshed")
     : action();
 }
 
 async function refreshAccessToken(expectedRefreshToken: string | null = refreshToken()) {
   const saved = expectedRefreshToken;
-  if (!saved) return false;
-  if (refreshToken() !== saved) return true;
+  if (!saved) return "invalid" as const;
+  if (refreshToken() !== saved) return "refreshed" as const;
   if (refreshInFlight) return refreshInFlight;
   const refresh = async () => {
-    if (refreshToken() !== saved) return true;
+    if (refreshToken() !== saved) return "refreshed" as const;
     try {
       const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: "POST",
@@ -211,12 +213,13 @@ async function refreshAccessToken(expectedRefreshToken: string | null = refreshT
         signal: AbortSignal.timeout(30000),
       });
       const body = await response.json().catch(() => null) as { data?: { accessToken: string; refreshToken: string } } | null;
-      if (!response.ok || !body?.data?.accessToken || !body.data.refreshToken) return refreshToken() !== saved;
-      if (refreshToken() !== saved) return true;
+      if (refreshToken() !== saved) return "refreshed" as const;
+      if (!response.ok) return response.status < 500 && response.status !== 429 ? "invalid" as const : "unavailable" as const;
+      if (!body?.data?.accessToken || !body.data.refreshToken) return "unavailable" as const;
       saveTokens(body.data);
-      return true;
+      return "refreshed" as const;
     } catch {
-      return false;
+      return "unavailable" as const;
     }
   };
   refreshInFlight = withRefreshLock(saved, refresh).finally(() => { refreshInFlight = null; });
@@ -240,7 +243,12 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   }
   const body = await response.json().catch(() => null) as { data?: T; error?: ApiError } | null;
   if (response.status === 401 && accessToken && retry && !path.startsWith("/auth/")) {
-    if (await refreshAccessToken(refreshTokenAtRequest)) return request<T>(path, init, false);
+    const refreshResult = await refreshAccessToken(refreshTokenAtRequest);
+    if (refreshResult === "refreshed") return request<T>(path, init, false);
+    if (refreshResult === "unavailable") {
+      window.dispatchEvent(new CustomEvent(CONNECTION_STATUS_EVENT, { detail: false }));
+      throw new DOMException("인증 서버에 연결할 수 없습니다.", "NetworkError");
+    }
   }
   if (response.status === 401 && accessToken) {
     if (token() === accessToken && refreshToken() === refreshTokenAtRequest) {
@@ -461,9 +469,9 @@ export function syncPendingAssignments() {
   if (!onlineNow() || !hasToken()) return Promise.resolve();
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
-    const pending = readStored<PendingOperation[]>(PENDING_KEY, []);
-    while (pending.length) {
-      const operation = pending[0];
+    while (true) {
+      const operation = readStored<PendingOperation[]>(PENDING_KEY, [])[0];
+      if (!operation) break;
       try {
         let assignment: Assignment;
         if (operation.type === "create") {
@@ -471,9 +479,10 @@ export function syncPendingAssignments() {
           assignment = await request<Assignment>("/assignments", { method: "POST", body: JSON.stringify(operation.payload) });
           const cached = cachedAssignments().filter((candidate) => candidate.id !== offlineId);
           saveAssignments([...cached, assignment]);
-          for (const queued of pending) {
-            if (queued.assignmentId === offlineId) queued.assignmentId = assignment.id;
-          }
+          const current = readStored<PendingOperation[]>(PENDING_KEY, []);
+          writeStored(PENDING_KEY, current
+            .filter((queued) => queued.key !== operation.key)
+            .map((queued) => queued.assignmentId === offlineId ? { ...queued, assignmentId: assignment.id } : queued));
         } else if (operation.type === "update") {
           assignment = await request<Assignment>(`/assignments/${operation.assignmentId}`, { method: "PATCH", body: JSON.stringify(operation.payload) });
           upsertAssignment(assignment);
@@ -481,8 +490,9 @@ export function syncPendingAssignments() {
           assignment = await request<Assignment>(`/assignments/${operation.assignmentId}/completion`, { method: "PUT", body: JSON.stringify(operation.payload) });
           upsertAssignment(assignment);
         }
-        pending.shift();
-        writeStored(PENDING_KEY, pending);
+        if (operation.type !== "create") {
+          writeStored(PENDING_KEY, readStored<PendingOperation[]>(PENDING_KEY, []).filter((queued) => queued.key !== operation.key));
+        }
       } catch (error) {
         if (!isNetworkError(error)) window.dispatchEvent(new CustomEvent(OFFLINE_SYNC_EVENT, { detail: apiMessage(error) }));
         return;
