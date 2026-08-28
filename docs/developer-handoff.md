@@ -1,6 +1,6 @@
 # RECORDS 웹 개발 인수인계
 
-기준일: 2026-08-28
+기준일: 2026-08-29
 
 ## 현재 구조
 
@@ -22,20 +22,11 @@
 
 ### AI 사진 분석
 
-`PhotoPicker`가 선택한 파일을 `POST /assignment-extractions`로 전송한다. 웹은 응답의 `candidates[0]`만 폼에 채운다. 사진 분석 실패, 오프라인, 서버의 AI 비활성화는 폼 오류로 표시한다.
-
-다음 작업:
-
-- 후보가 여러 개면 선택할 수 있게 한다.
-- `needsReview`를 필드별 경고로 보여준다.
-- 날짜가 없는 후보도 제목·과목을 유지하고 날짜는 직접 입력하게 한다.
-- 실제 이미지는 비식별 fixture로만 테스트한다.
+사진을 선택한 뒤 `사진 분석`을 눌러야 `POST /assignment-extractions`를 호출한다. 후보가 여러 개면 사용자가 선택하고, `needsReview` 필드는 주황색으로 강조한다. 날짜가 없는 후보는 날짜 입력을 비워 저장을 막으며 사용자가 직접 확인하게 한다. 사진 분석 실패, 오프라인, 서버의 AI 비활성화는 폼 오류로 표시한다.
 
 ### 사진 저장
 
-`downloadCalendarImage()`는 canvas로 월간 달력을 PNG로 만들어 브라우저 다운로드한다. 캘린더 이미지 저장은 로컬 구현이며, iOS 사진 앱에 직접 저장하는 기능은 아니다. 과제에 사용한 원본 사진은 서버에 저장하지 않는다.
-
-요구사항이 캘린더 배경화면이면 `navigator.share({ files })` 지원 여부를 확인하고 다운로드 fallback을 유지한다. 원본 사진 보관이면 백엔드 저장소·권한·삭제 정책을 먼저 확정해야 한다.
+`downloadCalendarImage()`는 canvas로 월간 달력을 PNG로 만든다. Web Share 파일 공유를 지원하면 iOS·Android 공유 시트를 먼저 열고, 지원하지 않으면 브라우저 다운로드로 저장한다. 과제에 사용한 원본 사진은 서버에 저장하지 않는다.
 
 ### 알림
 
@@ -47,7 +38,7 @@
 - iOS: iOS/iPadOS 16.4 이상에서 Safari 공유 → 홈 화면에 추가 → 홈 화면 앱 실행 → 앱 안에서 직접 탭해야 한다. 일반 Safari 탭에서는 권한 팝업이 뜨지 않는다.
 - 권한이 `denied`이면 버튼이 다시 팝업을 만들 수 없으므로 설정 앱에서 알림을 허용하도록 안내해야 한다.
 
-현재 생성·수정 폼에는 과제별 알람 버튼이 없다. 백엔드도 사용자 전역 설정만 저장한다. 과제별 토글을 추가할 때는 `notificationsEnabled`의 기본값, 기존 데이터 migration, 예약 취소·재생성 규칙을 함께 정한다.
+생성·수정 폼의 `마감 알림 받기` 토글이 `notificationsEnabled`를 전송한다. 기본값은 `true`이며, 끄면 서버가 해당 과제의 미전달 예약을 제거한다.
 
 ## 우선순위 작업
 
@@ -73,7 +64,7 @@
 
 대상 파일: `src/Prototype.tsx`, `src/webPush.ts`, `public/sw.js`, `index.html`.
 
-### 3. 과제별 알람 토글
+### 3. 과제별 알람 토글 — 완료
 
 생성·수정 요청에 다음 field를 추가하는 방향이다.
 
@@ -81,22 +72,20 @@
 {"notificationsEnabled": true}
 ```
 
-UI 토글과 API field를 동시에 변경하고, 과제 수정 시 미전달 예약만 재계산한다. 서버 계약이 먼저 확정되기 전에는 프론트만 임의로 저장하지 않는다.
+UI·API·DB migration을 함께 변경했고, 과제 수정 시 미전달 예약만 재계산한다.
 
-### 4. AI 결과 검토
+### 4. AI 결과 검토 — 완료
 
-후보 선택 화면을 추가하고, 후보의 `needsReview`에 포함된 입력을 강조한다. 모델이 날짜를 추측하지 않도록 빈 날짜도 정상 상태로 처리한다.
+후보 선택, `needsReview` 강조, 빈 날짜 저장 방지를 자동화 테스트로 검증한다. 실제 OpenAI 실호출은 비식별 이미지로만 별도 확인한다.
 
 ## 로컬·터널 검증
 
 ```bash
-npm install
-npm run check:runtime
-npx tsc --noEmit
-npm run build
+npm ci
+make frontend-check
 ```
 
-공개 터널 또는 Vercel에서 Web Push를 테스트할 때는 `VITE_API_BASE_URL`이 접근 가능한 HTTPS API URL을 가리켜야 하고, 서버 CORS 허용 목록에 프론트 origin이 있어야 한다. 프론트에는 `VITE_VAPID_PUBLIC_KEY`만 두며 VAPID 개인키와 `.env.local`은 커밋하지 않는다.
+`frontend-check`는 API mock·로컬 fixture 기반 Playwright만 실행하므로 Spring이나 실 DB가 필요하지 않다. Spring 연동 시나리오를 포함한 전체 Playwright는 백엔드 테스트 환경을 준비한 뒤 `npm run test:runtime`으로 실행한다. 공개 터널 또는 Vercel에서 Web Push를 테스트할 때는 `VITE_API_BASE_URL`이 접근 가능한 HTTPS Spring API URL을 가리켜야 하고, Spring CORS 허용 목록에 프론트 origin이 있어야 한다. 프론트에는 `VITE_VAPID_PUBLIC_KEY`만 두며 VAPID 개인키와 `.env.local`은 커밋하지 않는다.
 
 실기기 확인 순서:
 
