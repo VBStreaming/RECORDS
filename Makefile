@@ -2,8 +2,9 @@ PYTHON ?= python3.14
 VENV := .venv
 DATABASE_URL ?= postgresql+psycopg://records:records@localhost:54329/records
 TEST_DATABASE_URL ?= postgresql+psycopg://records:records@localhost:54329/records_test
+MOBILE_RUNTIME_TEST_PORT ?= 4174
 
-.PHONY: venv db-up db-down dev migrate migrate-test migration test lint format check lock web-install web-dev web-check
+.PHONY: venv db-up db-down dev migrate migrate-test migration test lint format check lock frontend-install frontend-dev frontend-check
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -44,11 +45,15 @@ lock:
 	$(VENV)/bin/python -m pip install -r requirements.in
 	$(VENV)/bin/python -m pip freeze > requirements.lock
 
-web-install:
-	npm --prefix web ci
+frontend-install:
+	npm ci
 
-web-dev:
-	npm --prefix web run dev
+frontend-dev:
+	npm run dev
 
-web-check:
-	npm --prefix web run check
+frontend-check:
+	npm run check:runtime
+	npx tsc --noEmit
+	npm run build
+	# Spring-connected scenarios stay in the full npm run test:runtime suite.
+	MOBILE_RUNTIME_TEST_PORT="$(MOBILE_RUNTIME_TEST_PORT)" npx playwright test --grep-invert "responsive signup|notification preferences|cached assignments"
