@@ -441,10 +441,10 @@ export async function updateNotificationPreferences(beforeDeadlineMinutes: Notif
   return preferences;
 }
 
-export async function registerPushToken(pushToken: string) {
-  await request<void>("/notifications/push-tokens", {
+export async function registerPushSubscription(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) {
+  await request<void>("/notifications/push-subscriptions", {
     method: "POST",
-    body: JSON.stringify({ token: pushToken }),
+    body: JSON.stringify({ endpoint: subscription.endpoint, p256dh: subscription.keys.p256dh, auth: subscription.keys.auth }),
   });
 }
 

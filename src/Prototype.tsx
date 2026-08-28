@@ -62,7 +62,7 @@ import {
   getNotificationPreferences,
   unreadNotificationCount,
   updateNotificationPreferences,
-  registerPushToken,
+  registerPushSubscription,
   updateAssignment,
   AUTH_EXPIRED_EVENT,
   CONNECTION_STATUS_EVENT,
@@ -71,7 +71,7 @@ import {
   type NotificationPreferences,
   type User,
 } from "./recordsApi";
-import { enableFirebasePush, listenForFirebaseMessages, type PushMessage } from "./firebaseMessaging";
+import { enableWebPush } from "./webPush";
 
 type Theme = "dark" | "light";
 type AuthMode = "login" | "signup";
@@ -438,6 +438,7 @@ function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [preference, setPreference] = useState<NotificationPreferences["beforeDeadlineMinutes"]>(60);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+  const [pushError, setPushError] = useState("");
   const loaded = useRef(false);
   const seen = useRef(new Set<string>());
   const reduceMotion = useReducedMotion();
@@ -449,11 +450,6 @@ function NotificationBell() {
         unreadNotificationCount(),
         getNotificationPreferences(),
       ]);
-      if (loaded.current && window.isSecureContext && "Notification" in window && window.Notification.permission === "granted") {
-        nextItems.filter((item) => !item.readAt && !seen.current.has(item.id)).forEach((item) => {
-          new window.Notification(item.title, { body: item.message });
-        });
-      }
       nextItems.forEach((item) => seen.current.add(item.id));
       loaded.current = true;
       setItems(nextItems);
@@ -479,23 +475,20 @@ function NotificationBell() {
     };
   }, [refresh]);
 
-  useEffect(() => listenForFirebaseMessages((payload: PushMessage) => {
-    const data = payload.data || {};
-    if (data.notificationId) seen.current.add(data.notificationId);
-    if (window.isSecureContext && "Notification" in window && window.Notification.permission === "granted" && data.title) {
-      new window.Notification(data.title, { body: data.message });
-    }
-    void refresh();
-  }), [refresh]);
-
   const enableBrowserNotifications = async () => {
     if (!("Notification" in window) || !window.isSecureContext) return;
     try {
-      setPermission(await enableFirebasePush(registerPushToken));
-    } catch {
-      setPermission(await window.Notification.requestPermission());
+      setPushError("");
+      setPermission(await enableWebPush(registerPushSubscription));
+    } catch (error) {
+      setPushError(error instanceof Error ? error.message : "브라우저 알림을 설정하지 못했습니다.");
     }
   };
+
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches
+    || "standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 
   const read = async (item: AppNotification) => {
     if (!item.readAt) {
@@ -539,8 +532,12 @@ function NotificationBell() {
             </select>
             <small>D-7·D-4·D-1 오전 7시와 D-Day 오전 7시 30분 알림은 항상 켜져 있어요.</small>
           </div>
-          {permission === "default" ? <button className="browser-notification-button" onClick={() => void enableBrowserNotifications()}>브라우저 알림 허용</button> : null}
-          {permission === "unsupported" && !window.isSecureContext ? <p className="notification-hint">기기 알림은 HTTPS 접속에서 사용할 수 있어요.</p> : null}
+          {permission === "default" && window.isSecureContext && (!isIos || isStandalone) ? <button className="browser-notification-button" onClick={() => void enableBrowserNotifications()}>브라우저 알림 허용</button> : null}
+          {permission === "default" && window.isSecureContext && isIos && !isStandalone ? <p className="notification-hint">iPhone/iPad는 공유 메뉴에서 홈 화면에 추가한 뒤 앱 아이콘으로 열어야 알림을 허용할 수 있어요.</p> : null}
+          {permission === "denied" ? <p className="notification-hint">브라우저 설정에서 RECORDS 알림 권한을 허용해 주세요.</p> : null}
+          {!window.isSecureContext ? <p className="notification-hint">기기 알림은 HTTPS 접속에서 사용할 수 있어요.</p> : null}
+          {permission === "unsupported" && window.isSecureContext ? <p className="notification-hint">이 브라우저는 Web Push 알림을 지원하지 않아요.</p> : null}
+          {pushError ? <p className="notification-hint">{pushError}</p> : null}
           <div className="notification-list">
             {items.length ? items.map((item) => (
               <button className={`notification-item ${item.readAt ? "read" : "unread"}`} key={item.id} onClick={() => void read(item)}>

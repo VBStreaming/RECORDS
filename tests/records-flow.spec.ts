@@ -305,7 +305,7 @@ test("notification preferences are available from the dashboard", async ({ page 
   await expect(page.getByRole("combobox", { name: "마감 전 알림" })).toHaveValue("30");
 });
 
-test("delivered notifications trigger a browser notification while the app is open", async ({ page }) => {
+test("delivered notifications do not create duplicate in-page notifications", async ({ page }) => {
   let notificationListCalls = 0;
   await page.addInitScript(() => {
     class TestNotification {
@@ -348,7 +348,7 @@ test("delivered notifications trigger a browser notification while the app is op
   await page.goto("/?screen=dashboard&theme=light");
   await expect.poll(() => notificationListCalls).toBeGreaterThan(0);
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  await expect.poll(() => page.evaluate(() => (window as Window & { __browserNotifications?: unknown[] }).__browserNotifications?.length || 0)).toBe(1);
+  await expect.poll(() => page.evaluate(() => (window as Window & { __browserNotifications?: unknown[] }).__browserNotifications?.length || 0)).toBe(0);
   await expect(page.getByRole("button", { name: "알림" })).toContainText("1");
 });
 

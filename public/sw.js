@@ -7,29 +7,19 @@ const APP_SHELL = [
   "/icons/icon-512.png",
 ];
 
-const firebaseQuery = new URL(self.location.href).searchParams;
-const firebaseConfig = Object.fromEntries(["apiKey", "projectId", "messagingSenderId", "appId"]
-  .map((key) => [key, firebaseQuery.get(key) || ""]));
-
-try {
-  if (Object.values(firebaseConfig).every(Boolean)) {
-    importScripts(
-      "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js",
-      "https://www.gstatic.com/firebasejs/11.10.0/firebase-messaging-compat.js",
-    );
-    firebase.initializeApp(firebaseConfig);
-    firebase.messaging().onBackgroundMessage((payload) => {
-      const data = payload.data || {};
-      self.registration.showNotification(data.title || "RECORDS 알림", {
-        body: data.message || "새로운 과제 알림이 있어요.",
-        data,
-        tag: data.notificationId || "records-notification",
-      });
-    });
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data?.json() || {};
+  } catch {
+    data = { message: event.data?.text() };
   }
-} catch {
-  // FCM is optional; the app shell remains available when the messaging CDN is unreachable.
-}
+  event.waitUntil(self.registration.showNotification(data.title || "RECORDS 알림", {
+    body: data.message || "새로운 과제 알림이 있어요.",
+    data,
+    tag: data.notificationId || "records-notification",
+  }));
+});
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
