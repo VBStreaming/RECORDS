@@ -7,7 +7,8 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    allowedHosts: ["terminal.local"],
+    allowedHosts: ["terminal.local", ".trycloudflare.com"],
   },
+  preview: { allowedHosts: [".trycloudflare.com"] },
   plugins: [react()],
 });
