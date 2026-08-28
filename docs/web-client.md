@@ -53,3 +53,15 @@ make web-check
 ```
 
 `web-check`는 TypeScript 검사와 production build를 실행한다. API 연결을 바꾼 경우에는 브라우저에서 회원가입 → 로그인 → 과제 생성 → 완료 처리 흐름도 확인한다. OpenAI 실호출은 비용과 개인정보 전송이 발생하므로 명시적인 PoC에서만 수행한다.
+
+## Web Push와 Vercel 배포
+
+알림은 Firebase SDK가 아니라 브라우저 표준 Web Push와 VAPID를 사용한다. `VITE_VAPID_PUBLIC_KEY`만 프론트에 넣고, VAPID 개인키는 Spring 서버 환경변수에만 둔다. iOS/iPadOS는 HTTPS와 홈 화면에 추가한 standalone 웹앱, 직접 탭 권한 요청이 필요하다.
+
+이 Vite 프로젝트는 별도 Vercel adapter 없이 다음 기본값으로 배포할 수 있다.
+
+- Build command: `npm run build`
+- Output directory: `dist/client`
+- Environment variables: `VITE_API_BASE_URL`, `VITE_VAPID_PUBLIC_KEY`
+
+`VITE_API_BASE_URL`은 Vercel에서 접근 가능한 HTTPS API origin이어야 하고, Spring `CORS_ALLOWED_ORIGINS`에 Vercel 배포 origin을 추가해야 한다. Vercel Hobby는 개인·비상업 용도 기준의 무료 플랜이며, Vercel이 배포 origin에 HTTPS 인증서를 제공한다. API 서버와 DB는 별도로 계속 운영한다.

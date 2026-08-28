@@ -1,6 +1,6 @@
 # RECORDS 웹 개발 인수인계
 
-기준일: 2026-08-25
+기준일: 2026-08-28
 
 ## 현재 구조
 
@@ -8,17 +8,17 @@
 |---|---|---|
 | API·인증 | `src/recordsApi.ts` | token 저장, refresh rotation, API envelope, offline queue |
 | 화면 | `src/Prototype.tsx` | 모바일·태블릿 분기, 로그인, 대시보드, 생성·수정, 알림 패널 |
-| Firebase 권한 | `src/firebaseMessaging.ts` | Notification 권한, FCM token 발급, foreground message |
-| service worker | `public/sw.js`, `index.html` | app shell cache, background FCM notification |
+| Web Push 권한 | `src/webPush.ts` | Notification 권한, 표준 PushSubscription 발급·등록 |
+| service worker | `public/sw.js`, `index.html` | app shell cache, 표준 background push notification |
 | 스타일 | `src/styles.css`, `src/prototype.css` | 반응형 레이아웃과 테마 |
 
 ## 현재 동작과 한계
 
 ### 인증
 
-로그인 성공 후 access·refresh token을 `localStorage`에 저장한다. access token이 `401`이면 `refreshInFlight`로 refresh 요청을 합친 뒤 원 요청을 한 번 재시도한다. refresh가 실패하면 저장된 token과 offline cache를 모두 지우고 `records:auth-expired`를 발생시킨다.
+로그인 성공 후 access·refresh token을 `localStorage`에 저장한다. access token이 `401`이면 같은 탭의 `refreshInFlight`와 origin 단위 Web Locks API로 refresh rotation을 조정한 뒤 원 요청을 한 번 재시도한다. refresh가 실패하면 저장된 token과 offline cache를 모두 지우고 `records:auth-expired`를 발생시킨다.
 
-현재 문제는 새로고침·동시 API 요청·여러 탭·offline sync가 refresh rotation과 겹칠 때 로그아웃이 발생하는 것이다. 다음 작업은 token 값이 아니라 요청 순서와 refresh 결과를 기록하는 재현 테스트부터 시작한다.
+새로고침·동시 API 요청·여러 탭·offline sync가 refresh rotation과 겹치는 회귀 테스트를 추가했고, 먼저 성공한 새 token을 뒤늦은 요청이 지우지 않도록 처리했다.
 
 ### AI 사진 분석
 
@@ -39,11 +39,11 @@
 
 ### 알림
 
-알림 패널은 사용자 전역 마감 전 알림을 10·30·60분 중 선택한다. `브라우저 알림 허용`을 누르면 Firebase Web Push token을 발급해 `POST /notifications/push-tokens`에 등록한다.
+알림 패널은 사용자 전역 마감 전 알림을 10·30·60분 중 선택한다. `브라우저 알림 허용`을 누르면 표준 Web Push subscription을 발급해 `POST /notifications/push-subscriptions`에 등록한다.
 
 플랫폼별 처리:
 
-- Android: HTTPS, service worker, Firebase Web 설정, 브라우저 권한이 필요하다.
+- Android: HTTPS, service worker, VAPID 공개키, 브라우저 권한이 필요하다.
 - iOS: iOS/iPadOS 16.4 이상에서 Safari 공유 → 홈 화면에 추가 → 홈 화면 앱 실행 → 앱 안에서 직접 탭해야 한다. 일반 Safari 탭에서는 권한 팝업이 뜨지 않는다.
 - 권한이 `denied`이면 버튼이 다시 팝업을 만들 수 없으므로 설정 앱에서 알림을 허용하도록 안내해야 한다.
 
@@ -51,7 +51,7 @@
 
 ## 우선순위 작업
 
-### 1. 로그인·로그아웃 안정화
+### 1. 로그인·로그아웃 안정화 — 완료
 
 완료 조건:
 
@@ -62,16 +62,16 @@
 
 대상 파일: `src/recordsApi.ts`, `src/Prototype.tsx`.
 
-### 2. Android·iOS 알림 QA
+### 2. Android·iOS 알림 QA — 구현 완료, 실기기 대기
 
 완료 조건:
 
 - 권한 상태 `default/granted/denied/unsupported`가 UI에 구분됨
 - iOS non-standalone 화면에 설치 안내가 표시됨
-- Android와 iOS 각각 token 등록 HTTP `2xx` 확인
+- Android와 iOS 각각 subscription 등록 HTTP `2xx` 확인
 - foreground/background에서 중복 알림이 생기지 않음
 
-대상 파일: `src/Prototype.tsx`, `src/firebaseMessaging.ts`, `public/sw.js`, `index.html`.
+대상 파일: `src/Prototype.tsx`, `src/webPush.ts`, `public/sw.js`, `index.html`.
 
 ### 3. 과제별 알람 토글
 
@@ -96,13 +96,13 @@ npx tsc --noEmit
 npm run build
 ```
 
-공개 터널에서 Firebase Web Push를 테스트할 때는 `VITE_API_BASE_URL`이 같은 터널의 API URL을 가리켜야 하고, 서버 CORS 허용 목록에 프론트 origin이 있어야 한다. `.env.local`과 Firebase service account는 커밋하지 않는다.
+공개 터널 또는 Vercel에서 Web Push를 테스트할 때는 `VITE_API_BASE_URL`이 접근 가능한 HTTPS API URL을 가리켜야 하고, 서버 CORS 허용 목록에 프론트 origin이 있어야 한다. 프론트에는 `VITE_VAPID_PUBLIC_KEY`만 두며 VAPID 개인키와 `.env.local`은 커밋하지 않는다.
 
 실기기 확인 순서:
 
 1. 회원가입 → 로그인 → 새로고침 → 과제 목록 유지
 2. access token 만료를 재현해 자동 refresh 확인
-3. Android Chrome에서 알림 허용 → token 등록 → 백그라운드 수신
+3. Android Chrome에서 알림 허용 → subscription 등록 → 백그라운드 수신
 4. iOS Safari에서 홈 화면 추가 후 앱 실행 → 알림 허용 → 백그라운드 수신
 5. 사진 분석은 비식별 이미지로 후보·경고·실패 메시지 확인
 6. 캘린더 이미지 저장은 Android 다운로드와 iOS 공유/다운로드를 따로 확인
