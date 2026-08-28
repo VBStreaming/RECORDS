@@ -295,7 +295,7 @@ test("expired access token rotates through refresh token before redirecting", as
   expect(userRequests).toBeGreaterThanOrEqual(2);
 });
 
-test("cross-tab refresh uses one rotation request and keeps the session", async ({ browser }) => {
+test("cross-tab refresh fallback uses one rotation request without Web Locks", async ({ browser }) => {
   const context = await browser.newContext();
   const first = await context.newPage();
   const second = await context.newPage();
@@ -325,6 +325,7 @@ test("cross-tab refresh uses one rotation request and keeps the session", async 
     await route.continue();
   });
   await context.addInitScript(() => {
+    Object.defineProperty(navigator, "locks", { configurable: true, value: undefined });
     localStorage.setItem("records-access-token", "expired-access");
     localStorage.setItem("records-refresh-token", "shared-refresh");
   });

@@ -16,7 +16,7 @@
 
 ### 인증
 
-로그인 성공 후 access·refresh token을 `localStorage`에 저장한다. access token이 `401`이면 같은 탭의 `refreshInFlight`와 origin 단위 Web Locks API로 refresh rotation을 조정한 뒤 원 요청을 한 번 재시도한다. refresh가 실패하면 저장된 token과 offline cache를 모두 지우고 `records:auth-expired`를 발생시킨다.
+로그인 성공 후 access·refresh token을 `localStorage`에 저장한다. access token이 `401`이면 같은 탭의 `refreshInFlight`와 origin 단위 Web Locks API로 refresh rotation을 조정한 뒤 원 요청을 한 번 재시도한다. Web Locks가 없는 Safari 계열은 만료 시간이 있는 localStorage lease로 같은 동작을 보장한다. 실제 invalid refresh일 때만 저장된 token과 offline cache를 지우고 `records:auth-expired`를 발생시킨다.
 
 새로고침·동시 API 요청·여러 탭·offline sync가 refresh rotation과 겹치는 회귀 테스트를 추가했고, 먼저 성공한 새 token을 뒤늦은 요청이 지우지 않도록 처리했다.
 

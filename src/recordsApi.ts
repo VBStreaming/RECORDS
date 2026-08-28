@@ -187,16 +187,58 @@ function optimisticAssignment(id: string, payload: AssignmentPayload, completed 
 }
 
 type RefreshResult = "refreshed" | "invalid" | "unavailable";
+type RefreshLease = { owner: string; refreshToken: string; expiresAt: number };
 
 let refreshInFlight: Promise<RefreshResult> | null = null;
 
 type BrowserLockManager = { request(name: string, callback: () => Promise<RefreshResult>): Promise<RefreshResult> };
 
+function waitForRefreshLeaseChange(timeoutMs: number) {
+  return new Promise<void>((resolve) => {
+    const finish = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("storage", changed);
+      resolve();
+    };
+    const changed = (event: StorageEvent) => {
+      if ([REFRESH_LOCK_KEY, REFRESH_TOKEN_KEY].includes(event.key || "")) finish();
+    };
+    const timer = window.setTimeout(finish, timeoutMs);
+    window.addEventListener("storage", changed);
+  });
+}
+
+async function withRefreshLease(expectedRefreshToken: string, action: () => Promise<RefreshResult>) {
+  const owner = localId();
+  while (refreshToken() === expectedRefreshToken) {
+    const now = Date.now();
+    const current = readStored<RefreshLease | null>(REFRESH_LOCK_KEY, null);
+    if (!current || current.refreshToken !== expectedRefreshToken || current.expiresAt <= now) {
+      writeStored(REFRESH_LOCK_KEY, { owner, refreshToken: expectedRefreshToken, expiresAt: now + 35_000 });
+      await waitForRefreshLeaseChange(40);
+      const winner = readStored<RefreshLease | null>(REFRESH_LOCK_KEY, null);
+      if (!winner) return action();
+      if (winner.owner === owner) {
+        try {
+          return refreshToken() === expectedRefreshToken ? await action() : "refreshed";
+        } finally {
+          if (readStored<RefreshLease | null>(REFRESH_LOCK_KEY, null)?.owner === owner) {
+            try { localStorage.removeItem(REFRESH_LOCK_KEY); } catch { /* Storage can be unavailable. */ }
+          }
+        }
+      }
+      continue;
+    }
+    await waitForRefreshLeaseChange(Math.min(250, Math.max(25, current.expiresAt - now)));
+  }
+  return "refreshed";
+}
+
 function withRefreshLock(expectedRefreshToken: string, action: () => Promise<RefreshResult>) {
   const locks = (navigator as Navigator & { locks?: BrowserLockManager }).locks;
   return locks
     ? locks.request(REFRESH_LOCK_KEY, async () => refreshToken() === expectedRefreshToken ? action() : "refreshed")
-    : action();
+    : withRefreshLease(expectedRefreshToken, action);
 }
 
 async function refreshAccessToken(expectedRefreshToken: string | null = refreshToken()) {
