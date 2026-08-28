@@ -18,6 +18,7 @@ export type Assignment = {
   title: string;
   subject: string;
   dueAt: string;
+  notificationsEnabled: boolean;
   completed: boolean;
   completedAt: string | null;
   dayOffset: number;
@@ -39,7 +40,7 @@ export type NotificationPreferences = { beforeDeadlineMinutes: 10 | 30 | 60 };
 export type Candidate = { title: string; subject: string | null; dueAt: string | null; needsReview: string[] };
 export type Extraction = { candidates: Candidate[]; requiresConfirmation: boolean; warnings: string[] };
 type ApiError = { status?: number; code?: string; message?: string; details?: Record<string, string> };
-type AssignmentPayload = { title: string; subject: string; dueAt: string };
+type AssignmentPayload = { title: string; subject: string; dueAt: string; notificationsEnabled: boolean };
 type PendingOperation =
   | { key: string; type: "create"; assignmentId: string; payload: AssignmentPayload }
   | { key: string; type: "update"; assignmentId: string; payload: AssignmentPayload }
@@ -327,8 +328,8 @@ export async function completeAssignment(id: string, completed: boolean) {
   return assignment;
 }
 
-export async function createAssignment(title: string, subject: string, dueAt: string) {
-  const payload = { title, subject, dueAt };
+export async function createAssignment(title: string, subject: string, dueAt: string, notificationsEnabled = true) {
+  const payload = { title, subject, dueAt, notificationsEnabled };
   if (onlineNow()) {
     try {
       const assignment = await request<Assignment>("/assignments", { method: "POST", body: JSON.stringify(payload) });
@@ -344,8 +345,8 @@ export async function createAssignment(title: string, subject: string, dueAt: st
   return assignment;
 }
 
-export async function updateAssignment(id: string, title: string, subject: string, dueAt: string) {
-  const payload = { title, subject, dueAt };
+export async function updateAssignment(id: string, title: string, subject: string, dueAt: string, notificationsEnabled = true) {
+  const payload = { title, subject, dueAt, notificationsEnabled };
   if (onlineNow() && !id.startsWith("offline-")) {
     try {
       const assignment = await request<Assignment>(`/assignments/${id}`, { method: "PATCH", body: JSON.stringify(payload) });

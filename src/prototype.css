@@ -807,6 +807,68 @@ button {
   opacity: 0;
 }
 
+.analyze-button {
+  height: 38px;
+  border: 1px solid var(--accent);
+  border-radius: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.analysis-review {
+  display: grid;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.analysis-review p {
+  margin: 0;
+}
+
+.candidate-list {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.candidate-list button {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 10px;
+}
+
+.candidate-list button.active,
+.review-needed input {
+  border-color: var(--accent);
+}
+
+.alarm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.alarm-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.alarm-toggle svg {
+  color: var(--accent);
+}
+
 .form-field {
   display: grid;
   flex: 1;

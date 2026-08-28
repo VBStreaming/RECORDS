@@ -68,6 +68,7 @@ import {
   CONNECTION_STATUS_EVENT,
   type Assignment,
   type AppNotification,
+  type Candidate,
   type NotificationPreferences,
   type User,
 } from "./recordsApi";
@@ -85,6 +86,7 @@ type Task = {
   subject: string;
   date: string;
   time: string;
+  notificationsEnabled: boolean;
   done: boolean;
   color: string;
 };
@@ -145,7 +147,7 @@ function taskFromAssignment(assignment: Assignment): Task {
   const dueAt = new Date(assignment.dueAt);
   const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(dueAt);
   const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(dueAt);
-  return { id: assignment.id, title: assignment.title, subject: assignment.subject, date, time, done: assignment.completed, color: colors[assignment.subject] || "#7c8cff" };
+  return { id: assignment.id, title: assignment.title, subject: assignment.subject, date, time, notificationsEnabled: assignment.notificationsEnabled ?? true, done: assignment.completed, color: colors[assignment.subject] || "#7c8cff" };
 }
 
 function canvasText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
@@ -266,10 +268,21 @@ async function downloadCalendarImage(
   drawCalendarCard(ctx, calendar, tasks, cardX, cardY, cardWidth, cardHeight, palette);
 
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("이미지를 저장할 수 없습니다.")), "image/png"));
+  const filename = `records-calendar-${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}-${preset.id}.png`;
+  const file = new File([blob], filename, { type: "image/png" });
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: "RECORDS 캘린더" });
+      return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+    }
+  }
+
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `records-calendar-${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}-${preset.id}.png`;
+  anchor.download = filename;
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
@@ -746,6 +759,35 @@ function PhotoPicker({ file, capture, onSelect }: { file: File | null; capture?:
   );
 }
 
+function AnalysisReview({ candidates, selected, warnings, onSelect }: { candidates: Candidate[]; selected: number; warnings: string[]; onSelect: (candidate: Candidate, index: number) => void }) {
+  if (!candidates.length && !warnings.length) return null;
+  return (
+    <div className="analysis-review" role="status">
+      {candidates.length > 1 ? (
+        <div className="candidate-list" aria-label="AI 분석 후보">
+          {candidates.map((candidate, index) => (
+            <button type="button" className={index === selected ? "active" : ""} key={`${candidate.title}-${index}`} onClick={() => onSelect(candidate, index)}>
+              {index + 1}. {candidate.title || "제목 확인 필요"}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {candidates[selected]?.needsReview.length ? <p>주황색 입력값을 직접 확인해 주세요.</p> : null}
+      {warnings.map((warning) => <p key={warning}>{warning}</p>)}
+    </div>
+  );
+}
+
+function candidateDueAt(candidate: Candidate) {
+  if (!candidate.dueAt) return null;
+  const date = new Date(candidate.dueAt);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    date: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date),
+    time: new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(date),
+  };
+}
+
 function useAuthExpiredRedirect() {
   const flow = useFlow();
   useEffect(() => {
@@ -767,8 +809,13 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
+  const [dueDate, setDueDate] = useState(todayInSeoul);
   const [dueTime, setDueTime] = useState("18:00");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [file, setFile] = useState<File | null>(null);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState(0);
+  const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -811,21 +858,25 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     return () => { mounted = false; };
   }, [calendar.year, calendar.month, online]);
 
+  const applyCandidate = (candidate: Candidate, index: number) => {
+    const extractedDueAt = candidateDueAt(candidate);
+    setSelectedCandidate(index);
+    setTitle(candidate.title || "");
+    setSubject(candidate.subject || "");
+    setDueDate(extractedDueAt?.date || "");
+    if (extractedDueAt) setDueTime(extractedDueAt.time);
+  };
+
   const analyzePhoto = async (selectedFile: File) => {
-    setFile(selectedFile);
     setBusy(true);
     setError("");
     try {
       const extraction = await extractAssignment(selectedFile);
       const candidate = extraction.candidates[0];
       if (!candidate) throw new Error("사진에서 과제를 찾지 못했습니다.");
-      setTitle(candidate.title || "");
-      if (candidate.subject) setSubject(candidate.subject);
-      if (candidate.dueAt) {
-        const date = new Date(candidate.dueAt);
-        setDueTime(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(date));
-        calendar.selectDate(new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date));
-      }
+      setCandidates(extraction.candidates);
+      setAnalysisWarnings(extraction.warnings);
+      applyCandidate(candidate, 0);
     } catch (analysisError) {
       setError(apiErrorMessage(analysisError));
     } finally {
@@ -834,16 +885,19 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   const addTask = async () => {
-    if (!title.trim()) return;
+    if (!title.trim() || !subject.trim() || !dueDate) return;
     setBusy(true);
     setError("");
     try {
-      const created = await createAssignment(title.trim(), subject, dueAt(calendar.selectedDate, dueTime));
+      const created = await createAssignment(title.trim(), subject, dueAt(dueDate, dueTime), notificationsEnabled);
       const createdTask = taskFromAssignment(created);
       setTasks((current) => [...current, createdTask]);
       calendar.selectDate(createdTask.date);
       setTitle("");
       setFile(null);
+      setNotificationsEnabled(true);
+      setCandidates([]);
+      setAnalysisWarnings([]);
       setSheetOpen(false);
     } catch (saveError) {
       setError(apiErrorMessage(saveError));
@@ -868,7 +922,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     setBusy(true);
     setError("");
     try {
-      const updated = await updateAssignment(editingTask.id, editingTask.title.trim(), editingTask.subject.trim(), dueAt(editingTask.date, editingTask.time));
+      const updated = await updateAssignment(editingTask.id, editingTask.title.trim(), editingTask.subject.trim(), dueAt(editingTask.date, editingTask.time), editingTask.notificationsEnabled);
       const updatedTask = taskFromAssignment(updated);
       setTasks((current) => current.map((task) => task.id === updated.id ? updatedTask : task));
       calendar.selectDate(updatedTask.date);
@@ -901,21 +955,24 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       </MobileScroll>
       {portalReady && screenRef.current ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
-          <button className="photo-button" onClick={() => setSheetOpen(true)}><CameraIcon /> 사진으로 추가</button>
-          <button className="plus-button" onClick={() => setSheetOpen(true)} aria-label="직접 과제 추가"><PlusIcon /></button>
+          <button className="photo-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }}><CameraIcon /> 사진으로 추가</button>
+          <button className="plus-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }} aria-label="직접 과제 추가"><PlusIcon /></button>
         </nav>, screenRef.current,
       ) : null}
       <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen} title="새 과제 추가" description="사진 한 장과 필수 정보만 빠르게 기록해요." snap={0.86}>
         <div className="add-form">
-          <PhotoPicker file={file} capture="environment" onSelect={(selectedFile) => void analyzePhoto(selectedFile)} />
+          <PhotoPicker file={file} capture="environment" onSelect={(selectedFile) => { setFile(selectedFile); setCandidates([]); setAnalysisWarnings([]); }} />
+          {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
+          <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
-          <label className="form-field"><span>과제명</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="과제명을 입력하세요" /></label>
+          <label className={`form-field ${candidates[selectedCandidate]?.needsReview.includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="과제명을 입력하세요" /></label>
           <div className="form-row">
-            <label className="form-field"><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
-            <label className="form-field"><span>마감일</span><input type="date" value={calendar.selectedDate} onChange={(event) => calendar.selectDate(event.target.value)} /></label>
+            <label className={`form-field ${candidates[selectedCandidate]?.needsReview.includes("subject") ? "review-needed" : ""}`}><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
+            <label className={`form-field ${candidates[selectedCandidate]?.needsReview.includes("dueAt") ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
           </div>
           <label className="form-field"><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => setDueTime(event.target.value)} /></label>
-          <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
+          <label className="alarm-toggle"><input type="checkbox" checked={notificationsEnabled} onChange={(event) => setNotificationsEnabled(event.target.checked)} /><BellIcon />마감 알림 받기</label>
+          <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || !dueDate || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
           <button className="sheet-close" onClick={() => setSheetOpen(false)} aria-label="닫기"><Cross2Icon /></button>
         </div>
       </BottomSheet>
@@ -928,6 +985,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
               <label className="form-field"><span>마감일</span><input type="date" value={editingTask.date} onChange={(event) => setEditingTask((task) => task ? { ...task, date: event.target.value } : task)} /></label>
               <label className="form-field"><span>마감 시간</span><input type="time" value={editingTask.time} onChange={(event) => setEditingTask((task) => task ? { ...task, time: event.target.value } : task)} /></label>
             </div>
+            <label className="alarm-toggle"><input type="checkbox" checked={editingTask.notificationsEnabled} onChange={(event) => setEditingTask((task) => task ? { ...task, notificationsEnabled: event.target.checked } : task)} /><BellIcon />마감 알림 받기</label>
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
           </div>
         ) : null}
@@ -961,10 +1019,11 @@ export default function Prototype() {
 }
 
 function useMobileViewport() {
-  const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 700px)").matches);
+  const query = "(max-width: 700px), (max-height: 500px) and (max-width: 950px)";
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(query).matches);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 700px)");
+    const media = window.matchMedia(query);
     const update = () => setIsMobile(media.matches);
     update();
     media.addEventListener("change", update);
@@ -1038,8 +1097,13 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
+  const [dueDate, setDueDate] = useState(todayInSeoul);
   const [dueTime, setDueTime] = useState("18:00");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [file, setFile] = useState<File | null>(null);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState(0);
+  const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const calendar = useCalendar(tasks);
@@ -1071,21 +1135,25 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     return () => { mounted = false; };
   }, [calendar.year, calendar.month, online]);
 
+  const applyCandidate = (candidate: Candidate, index: number) => {
+    const extractedDueAt = candidateDueAt(candidate);
+    setSelectedCandidate(index);
+    setTitle(candidate.title || "");
+    setSubject(candidate.subject || "");
+    setDueDate(extractedDueAt?.date || "");
+    if (extractedDueAt) setDueTime(extractedDueAt.time);
+  };
+
   const analyzePhoto = async (selectedFile: File) => {
-    setFile(selectedFile);
     setBusy(true);
     setError("");
     try {
       const extraction = await extractAssignment(selectedFile);
       const candidate = extraction.candidates[0];
       if (!candidate) throw new Error("사진에서 과제를 찾지 못했습니다.");
-      setTitle(candidate.title || "");
-      if (candidate.subject) setSubject(candidate.subject);
-      if (candidate.dueAt) {
-        const date = new Date(candidate.dueAt);
-        setDueTime(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(date));
-        calendar.selectDate(new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date));
-      }
+      setCandidates(extraction.candidates);
+      setAnalysisWarnings(extraction.warnings);
+      applyCandidate(candidate, 0);
     } catch (analysisError) {
       setError(apiErrorMessage(analysisError));
     } finally {
@@ -1094,16 +1162,19 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   const addTask = async () => {
-    if (!title.trim()) return;
+    if (!title.trim() || !subject.trim() || !dueDate) return;
     setBusy(true);
     setError("");
     try {
-      const created = await createAssignment(title.trim(), subject, dueAt(calendar.selectedDate, dueTime));
+      const created = await createAssignment(title.trim(), subject, dueAt(dueDate, dueTime), notificationsEnabled);
       const createdTask = taskFromAssignment(created);
       setTasks((current) => [...current, createdTask]);
       calendar.selectDate(createdTask.date);
       setTitle("");
       setFile(null);
+      setNotificationsEnabled(true);
+      setCandidates([]);
+      setAnalysisWarnings([]);
       setAddOpen(false);
     } catch (saveError) {
       setError(apiErrorMessage(saveError));
@@ -1128,7 +1199,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     setBusy(true);
     setError("");
     try {
-      const updated = await updateAssignment(editingTask.id, editingTask.title.trim(), editingTask.subject.trim(), dueAt(editingTask.date, editingTask.time));
+      const updated = await updateAssignment(editingTask.id, editingTask.title.trim(), editingTask.subject.trim(), dueAt(editingTask.date, editingTask.time), editingTask.notificationsEnabled);
       const updatedTask = taskFromAssignment(updated);
       setTasks((current) => current.map((task) => task.id === updated.id ? updatedTask : task));
       calendar.selectDate(updatedTask.date);
@@ -1152,7 +1223,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
       </aside>
       <section className="tablet-content">
-        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "MONTHLY CALENDAR" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => setAddOpen(true)}><CameraIcon />사진으로 추가</button></div></header>
+        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "MONTHLY CALENDAR" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><CameraIcon />사진으로 추가</button></div></header>
         {view === "dashboard" ? (
           <div className="tablet-grid">
             <div className="tablet-left">
@@ -1172,15 +1243,18 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         {addOpen ? (
           <TabletModal key="add-assignment" label="새 과제 추가">
             <header><div><p className="section-label">QUICK ADD</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
-            <PhotoPicker file={file} onSelect={(selectedFile) => void analyzePhoto(selectedFile)} />
+            <PhotoPicker file={file} onSelect={(selectedFile) => { setFile(selectedFile); setCandidates([]); setAnalysisWarnings([]); }} />
+            {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
+            <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
-            <label className="form-field"><span>과제명</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="과제명을 입력하세요" /></label>
+            <label className={`form-field ${candidates[selectedCandidate]?.needsReview.includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="과제명을 입력하세요" /></label>
             <div className="form-row">
-              <label className="form-field"><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
-              <label className="form-field"><span>마감일</span><input type="date" value={calendar.selectedDate} onChange={(event) => calendar.selectDate(event.target.value)} /></label>
+              <label className={`form-field ${candidates[selectedCandidate]?.needsReview.includes("subject") ? "review-needed" : ""}`}><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
+              <label className={`form-field ${candidates[selectedCandidate]?.needsReview.includes("dueAt") ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
             </div>
             <label className="form-field"><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => setDueTime(event.target.value)} /></label>
-            <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
+            <label className="alarm-toggle"><input type="checkbox" checked={notificationsEnabled} onChange={(event) => setNotificationsEnabled(event.target.checked)} /><BellIcon />마감 알림 받기</label>
+            <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || !dueDate || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
           </TabletModal>
         ) : null}
         {editingTask ? (
@@ -1193,6 +1267,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
               <label className="form-field"><span>마감일</span><input type="date" value={editingTask.date} onChange={(event) => setEditingTask((task) => task ? { ...task, date: event.target.value } : task)} /></label>
               <label className="form-field"><span>마감 시간</span><input type="time" value={editingTask.time} onChange={(event) => setEditingTask((task) => task ? { ...task, time: event.target.value } : task)} /></label>
             </div>
+            <label className="alarm-toggle"><input type="checkbox" checked={editingTask.notificationsEnabled} onChange={(event) => setEditingTask((task) => task ? { ...task, notificationsEnabled: event.target.checked } : task)} /><BellIcon />마감 알림 받기</label>
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
           </TabletModal>
         ) : null}

@@ -130,7 +130,9 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
   await page.getByRole("textbox", { name: "과제명" }).fill("다음 달 과제");
   await page.getByRole("textbox", { name: "과목" }).fill("자율");
   await page.getByRole("textbox", { name: "마감일" }).fill(nextMonthDate);
+  await page.getByRole("checkbox", { name: "마감 알림 받기" }).uncheck();
   await page.getByRole("button", { name: "과제 저장" }).click();
+  expect((createdAssignment as Record<string, unknown>).notificationsEnabled).toBe(false);
 
   await expect(page.locator(".calendar-card").getByRole("heading", { name: `${nextYear}. ${nextMonth}` })).toBeVisible();
   await expect(page.getByRole("heading", { name: "다음 달 과제" })).toBeVisible();
@@ -154,10 +156,80 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
     expect(png.readUInt32BE(20)).toBe(height);
     if (index === imagePresets.length - 1) break;
   }
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async (data: ShareData) => {
+        const file = data.files?.[0];
+        (window as Window & { __sharedCalendar?: { name?: string; type?: string } }).__sharedCalendar = { name: file?.name, type: file?.type };
+      },
+    });
+  });
+  await page.getByRole("button", { name: "배경화면으로 저장" }).click();
+  await page.getByRole("button", { name: "스마트폰 비율 (세로)로 저장" }).click();
+  await expect.poll(() => page.evaluate(() => (window as Window & { __sharedCalendar?: { name?: string } }).__sharedCalendar?.name)).toContain("records-calendar-");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?screen=dashboard&theme=light");
   await expect(page.locator(".flow-stack")).toBeVisible();
   await expect(page.locator(".mobile-cursor")).toHaveCount(0);
+});
+
+test("photo analysis requires an explicit action and supports candidate review", async ({ page }) => {
+  let extractionRequests = 0;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/assignment-extractions") {
+      extractionRequests += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: {
+          candidates: [
+            { title: "첫 후보", subject: "수학", dueAt: null, needsReview: ["dueAt"] },
+            { title: "두 번째 후보", subject: "직접 입력 과목", dueAt: "2030-09-10T09:00:00+09:00", needsReview: [] },
+          ],
+          requiresConfirmation: true,
+          warnings: ["날짜가 불명확한 후보가 있습니다."],
+        } }),
+      });
+      return;
+    }
+    if (url.pathname === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments" && request.method() === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [] }) });
+      return;
+    }
+    if (url.pathname.startsWith("/notifications")) {
+      const data = url.pathname.endsWith("unread-count") ? { count: 0 } : url.pathname.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?screen=dashboard&theme=light");
+  await page.getByRole("button", { name: "사진으로 추가" }).click();
+  await page.locator('input[type="file"]').setInputFiles({ name: "assignment.png", mimeType: "image/png", buffer: Buffer.from([137, 80, 78, 71]) });
+  expect(extractionRequests).toBe(0);
+  await page.getByRole("button", { name: "사진 분석" }).click();
+  await expect.poll(() => extractionRequests).toBe(1);
+  await expect(page.getByRole("button", { name: "1. 첫 후보" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("");
+  await expect(page.getByRole("button", { name: "과제 저장" })).toBeDisabled();
+  await page.getByRole("button", { name: "2. 두 번째 후보" }).click();
+  await expect(page.getByRole("textbox", { name: "과제명" })).toHaveValue("두 번째 후보");
+  await expect(page.getByRole("textbox", { name: "과목" })).toHaveValue("직접 입력 과목");
+  await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("2030-09-10");
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.locator(".flow-stack")).toBeVisible();
+  await expect(page.locator(".tablet-dashboard")).toHaveCount(0);
 });
 
 test("expired access token redirects to login on tablet and mobile", async ({ page }) => {
@@ -442,6 +514,66 @@ test("delivered notifications do not create duplicate in-page notifications", as
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await expect.poll(() => page.evaluate(() => (window as Window & { __browserNotifications?: unknown[] }).__browserNotifications?.length || 0)).toBe(0);
   await expect(page.getByRole("button", { name: "알림" })).toContainText("1");
+});
+
+test("Web Push replaces a subscription created with a different VAPID key", async ({ page }) => {
+  let registeredEndpoint = "";
+  await page.addInitScript(() => {
+    const state = { unsubscribed: 0, subscribed: 0 };
+    (window as Window & { __pushState?: typeof state }).__pushState = state;
+    const existing = {
+      options: { applicationServerKey: new Uint8Array([1, 2, 3]).buffer },
+      unsubscribe: async () => { state.unsubscribed += 1; return true; },
+      toJSON: () => ({ endpoint: "https://push.example/old", keys: { p256dh: "old", auth: "old" } }),
+    };
+    const replacement = {
+      options: { applicationServerKey: new Uint8Array(65).buffer },
+      unsubscribe: async () => true,
+      toJSON: () => ({ endpoint: "https://push.example/new", keys: { p256dh: "new-p256dh", auth: "new-auth" } }),
+    };
+    Object.defineProperty(navigator.serviceWorker, "ready", {
+      configurable: true,
+      value: Promise.resolve({ pushManager: {
+        getSubscription: async () => existing,
+        subscribe: async () => { state.subscribed += 1; return replacement; },
+      } }),
+    });
+    class TestNotification {
+      static permission: NotificationPermission = "default";
+      static requestPermission = async () => "granted" as NotificationPermission;
+    }
+    Object.defineProperty(window, "Notification", { configurable: true, value: TestNotification });
+  });
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/notifications/push-subscriptions") {
+      registeredEndpoint = (request.postDataJSON() as { endpoint: string }).endpoint;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: null }) });
+      return;
+    }
+    if (url.pathname === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [] }) });
+      return;
+    }
+    if (url.pathname.startsWith("/notifications")) {
+      const data = url.pathname.endsWith("unread-count") ? { count: 0 } : url.pathname.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
+  await page.goto("/?screen=dashboard&theme=light");
+  await page.getByRole("button", { name: "알림" }).click();
+  await page.getByRole("button", { name: "브라우저 알림 허용" }).click();
+  await expect.poll(() => page.evaluate(() => (window as Window & { __pushState?: { unsubscribed: number } }).__pushState?.unsubscribed)).toBe(1);
+  await expect.poll(() => page.evaluate(() => (window as Window & { __pushState?: { subscribed: number } }).__pushState?.subscribed)).toBe(1);
+  expect(registeredEndpoint).toBe("https://push.example/new");
 });
 
 test("cached assignments remain usable offline and sync after reconnect", async ({ page, context, browserName }) => {
