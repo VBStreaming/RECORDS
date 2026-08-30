@@ -24,11 +24,13 @@ export function isWebPushConfigured() {
 
 export async function enableWebPush(registerSubscription: (subscription: PushSubscriptionPayload) => Promise<void>) {
   if (!isWebPushConfigured()) throw new Error("Web Push 설정이 없습니다.");
-  if (!window.isSecureContext || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-    throw new Error("HTTPS와 서비스워커가 필요합니다.");
-  }
+  if (!window.isSecureContext) throw new Error("브라우저 알림은 HTTPS에서 사용할 수 있습니다.");
+  if (!("Notification" in window)) throw new Error("이 브라우저는 알림을 지원하지 않습니다.");
   const permission = await window.Notification.requestPermission();
   if (permission !== "granted") return permission;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    throw new Error("이 브라우저는 Web Push를 지원하지 않습니다.");
+  }
 
   const registration = await navigator.serviceWorker.ready;
   const applicationServerKey = decodeBase64Url(vapidPublicKey);
