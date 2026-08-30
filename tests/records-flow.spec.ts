@@ -571,7 +571,6 @@ test("Web Push replaces a subscription created with a different VAPID key", asyn
   await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
   await page.goto("/?screen=dashboard&theme=light");
   await page.getByRole("button", { name: "알림" }).click();
-  await page.getByRole("button", { name: "브라우저 알림 허용" }).click();
   await expect.poll(() => page.evaluate(() => (window as Window & { __pushState?: { unsubscribed: number } }).__pushState?.unsubscribed)).toBe(1);
   await expect.poll(() => page.evaluate(() => (window as Window & { __pushState?: { subscribed: number } }).__pushState?.subscribed)).toBe(1);
   expect(registeredEndpoint).toBe("https://push.example/new");
