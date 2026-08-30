@@ -72,7 +72,7 @@ import {
   type NotificationPreferences,
   type User,
 } from "./recordsApi";
-import { enableWebPush } from "./webPush";
+import { enableWebPush, isWebPushConfigured, requestWebPushPermission } from "./webPush";
 
 type Theme = "dark" | "light";
 type AuthMode = "login" | "signup";
@@ -611,6 +611,20 @@ function AuthField({ icon, label, ...props }: InputHTMLAttributes<HTMLInputEleme
   );
 }
 
+function requestLoginNotificationPermission() {
+  if (!isWebPushConfigured()) return null;
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches
+    || "standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+  if (isIos && !isStandalone) return null;
+  try {
+    return requestWebPushPermission();
+  } catch {
+    return null;
+  }
+}
+
 function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: () => void; onSwitch: () => void }) {
   useAuthExpiredRedirect();
   const { theme } = useTheme();
@@ -631,11 +645,13 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
     }
     setError("");
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    const permissionRequest = mode === "login" ? requestLoginNotificationPermission()?.catch(() => null) ?? null : null;
     setSubmitting(true);
     try {
       if (mode === "signup") await signup(name.trim(), email.trim(), studentId.trim(), password);
       else await login(email.trim(), password);
       onSuccess();
+      if (permissionRequest) void permissionRequest.then((permission) => permission === "granted" ? enableWebPush(registerPushSubscription, permission) : undefined).catch(() => undefined);
     } catch (submitError) {
       setError(apiErrorMessage(submitError));
     } finally {
@@ -1063,10 +1079,12 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
     }
     setError("");
     setSubmitting(true);
+    const permissionRequest = mode === "login" ? requestLoginNotificationPermission()?.catch(() => null) ?? null : null;
     try {
       if (mode === "signup") await signup(name.trim(), email.trim(), studentId.trim(), password);
       else await login(email.trim(), password);
       onSuccess();
+      if (permissionRequest) void permissionRequest.then((permission) => permission === "granted" ? enableWebPush(registerPushSubscription, permission) : undefined).catch(() => undefined);
     } catch (submitError) {
       setError(apiErrorMessage(submitError));
     } finally {
