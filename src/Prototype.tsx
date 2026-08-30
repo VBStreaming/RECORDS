@@ -520,7 +520,18 @@ function NotificationBell() {
 
   return (
     <div className="notification-menu">
-      <button className="icon-button notification-button" onClick={() => setOpen((current) => !current)} aria-label="알림" aria-expanded={open}>
+      <button
+        className="icon-button notification-button"
+        onClick={() => {
+          const nextOpen = !open;
+          setOpen(nextOpen);
+          if (nextOpen && permission === "default" && window.isSecureContext && (!isIos || isStandalone)) {
+            void enableBrowserNotifications();
+          }
+        }}
+        aria-label="알림"
+        aria-expanded={open}
+      >
         <BellIcon />
         {unread ? <span className="notification-count">{unread > 9 ? "9+" : unread}</span> : null}
       </button>
