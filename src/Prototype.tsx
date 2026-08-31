@@ -235,6 +235,7 @@ function drawCalendarCard(
       .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
       .reduce((result, task) => result.set(task.date, [...(result.get(task.date) || []), task]), new Map<string, Task[]>()),
   );
+  ctx.textAlign = "left";
   const agendaTop = gridY + gridHeight + 38;
   ctx.fillStyle = palette.line;
   ctx.fillRect(x + 28, agendaTop - 22, width - 56, 2);
