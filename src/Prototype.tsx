@@ -178,7 +178,7 @@ function drawCalendarCard(
 
   ctx.fillStyle = palette.muted;
   ctx.font = "700 18px Roboto, system-ui, sans-serif";
-  ctx.fillText("MONTHLY", x + 34, y + 48);
+  ctx.fillText("월간", x + 34, y + 48);
   ctx.fillStyle = palette.ink;
   ctx.font = "900 36px Roboto, system-ui, sans-serif";
   ctx.fillText(`${calendar.year}. ${String(calendar.month + 1).padStart(2, "0")}`, x + 34, y + 92);
@@ -241,7 +241,7 @@ function drawCalendarCard(
   ctx.fillRect(x + 28, agendaTop - 22, width - 56, 2);
   ctx.fillStyle = palette.muted;
   ctx.font = "700 15px Roboto, system-ui, sans-serif";
-  ctx.fillText("UPCOMING ASSIGNMENTS", x + 28, agendaTop + 14);
+  ctx.fillText("예정된 과제", x + 28, agendaTop + 14);
 
   const groupHeight = landscape ? 72 : 92;
   const visibleGroups = groups.slice(0, Math.max(1, Math.floor((y + height - agendaTop - 36) / groupHeight)));
@@ -318,7 +318,7 @@ async function downloadCalendarImage(
 
   ctx.fillStyle = palette.muted;
   ctx.font = "700 16px Roboto, system-ui, sans-serif";
-  ctx.fillText("ASSIGNMENT PLANNER", 56, 58);
+  ctx.fillText("과제 플래너", 56, 58);
   ctx.fillStyle = palette.ink;
   ctx.font = "900 42px Roboto, system-ui, sans-serif";
   ctx.fillText("RECORDS.", 56, 108);
@@ -608,7 +608,7 @@ function NotificationBell() {
           exit={{ opacity: 0, y: reduceMotion ? 0 : -6, scale: reduceMotion ? 1 : 0.98 }}
           transition={{ duration: reduceMotion ? 0.01 : 0.2, ease: [0.2, 0.8, 0.2, 1] }}
         >
-          <header><div><p className="section-label">NOTIFICATIONS</p><h2>알림</h2></div><button onClick={() => void markAllNotificationsRead().then(refresh)}>모두 읽음</button></header>
+          <header><div><p className="section-label">알림</p><h2>알림</h2></div><button onClick={() => void markAllNotificationsRead().then(refresh)}>모두 읽음</button></header>
           <div className="notification-preferences">
             <strong>마감 전 알림</strong>
             <select aria-label="마감 전 알림" value={preference} onChange={(event) => void changePreference(event.target.value)}>
@@ -726,7 +726,7 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
       <main className="auth-screen" aria-label={mode === "login" ? "로그인" : "회원가입"}>
         <header className="auth-topbar"><Brand /><ThemeButton /></header>
         <section className="auth-intro">
-          <p className="section-label">FOR YOUR SCHOOL DAYS</p>
+          <p className="section-label">학교 생활을 위한 플래너</p>
           <h1>{mode === "login" ? <>과제를 놓치지 않는<br />가벼운 시작.</> : <>학교 생활을 한곳에<br />차곡차곡.</>}</h1>
           <p>{mode === "login" ? "오늘의 마감부터 한눈에 확인해 보세요." : "기본 정보만 입력하면 바로 시작할 수 있어요."}</p>
         </section>
@@ -765,7 +765,7 @@ function CalendarPanel({ calendar, tasks, expanded = false }: { calendar: Return
   return (
     <section className={`calendar-card ${expanded ? "expanded" : ""}`}>
       <div className="calendar-header">
-        <div><p className="section-label">MONTHLY</p><h2>{year}. {String(month + 1).padStart(2, "0")}</h2></div>
+        <div><p className="section-label">월간</p><h2>{year}. {String(month + 1).padStart(2, "0")}</h2></div>
         <div className="month-controls">
           <button onClick={() => changeMonth(-1)} aria-label="이전 달"><ChevronLeftIcon /></button>
           <button onClick={() => changeMonth(1)} aria-label="다음 달"><ChevronRightIcon /></button>
@@ -807,7 +807,7 @@ function TaskList({ tasks, selectedDate, onToggle, onEdit }: { tasks: Task[]; se
   return (
     <section className="task-section">
       <div className="task-heading">
-        <div><p className="section-label">SELECTED DAY</p><h2>{Number(selectedDate.slice(5, 7))}월 {Number(selectedDate.slice(8))}일의 과제</h2></div>
+        <div><p className="section-label">선택한 날짜</p><h2>{Number(selectedDate.slice(5, 7))}월 {Number(selectedDate.slice(8))}일의 과제</h2></div>
         <span>{selectedTasks.length}</span>
       </div>
       <div className="task-list">
@@ -1028,12 +1028,12 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       <MobileScroll className={`app-screen theme-${theme}`}>
         <main className="records" aria-label="과제 디데이 대시보드">
           <header className="topbar">
-            <div><p className="eyebrow">ASSIGNMENT PLANNER</p><Brand /></div>
+            <div><p className="eyebrow">과제 플래너</p><Brand /></div>
             <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={onLogout} aria-label="로그아웃"><ExitIcon /></button></div>
           </header>
           <OfflineBadge online={online} />
           <section className="deadline-card" aria-label="가장 가까운 마감">
-            <div className="deadline-copy"><p className="section-label"><span /> NEXT DEADLINE</p><strong>{deadline?.dday || "-"}</strong><p className="deadline-title">{deadline?.task.title || "마감 예정인 과제가 없어요"}</p><p className="deadline-meta">{deadline?.label || "새 과제를 추가해 보세요."}</p></div>
+            <div className="deadline-copy"><p className="section-label"><span /> 다음 마감</p><strong>{deadline?.dday || "-"}</strong><p className="deadline-title">{deadline?.task.title || "마감 예정인 과제가 없어요"}</p><p className="deadline-meta">{deadline?.label || "새 과제를 추가해 보세요."}</p></div>
             <div className="progress-ring" style={{ "--progress": `${progress.percent}%` } as CSSProperties} aria-label={`전체 ${tasks.length}개 중 ${progress.completed}개 완료, 진행 중 ${progress.active}개`}><span>{progress.active}</span><small>진행 중</small></div>
           </section>
           <CalendarPanel calendar={calendar} tasks={tasks} />
@@ -1155,11 +1155,11 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
   };
   return (
     <main className="tablet-auth">
-      <section className="tablet-auth-brand"><Brand /><div><p className="section-label">ASSIGNMENT PLANNER</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>RECORDS · STUDENT PLANNER</small></section>
+      <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>RECORDS · 학생 플래너</small></section>
       <section className="tablet-auth-form">
         <ThemeButton />
         <div className="tablet-form-wrap">
-          <p className="section-label">{mode === "login" ? "WELCOME BACK" : "CREATE ACCOUNT"}</p>
+          <p className="section-label">{mode === "login" ? "다시 만나서 반가워요" : "계정 만들기"}</p>
           <h2>{mode === "login" ? "다시 만나서 반가워요." : "학생 정보를 알려주세요."}</h2>
           <p>{mode === "login" ? "이메일로 로그인해 오늘의 과제를 확인하세요." : "학번, 이름, 이메일로 RECORDS를 시작하세요."}</p>
           <form onSubmit={submit} noValidate>
@@ -1313,11 +1313,11 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
       </aside>
       <section className="tablet-content">
-        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "MONTHLY CALENDAR" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><CameraIcon />사진으로 추가</button></div></header>
+        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><CameraIcon />사진으로 추가</button></div></header>
         {view === "dashboard" ? (
           <div className="tablet-grid">
             <div className="tablet-left">
-              <section className="deadline-card tablet-deadline" aria-label="가장 가까운 마감"><div className="deadline-copy"><p className="section-label"><span /> NEXT DEADLINE</p><strong>{deadline?.dday || "-"}</strong><p className="deadline-title">{deadline?.task.title || "마감 예정인 과제가 없어요"}</p><p className="deadline-meta">{deadline?.label || "새 과제를 추가해 보세요."}</p></div><div className="progress-ring" style={{ "--progress": `${progress.percent}%` } as CSSProperties} aria-label={`전체 ${tasks.length}개 중 ${progress.completed}개 완료, 진행 중 ${progress.active}개`}><span>{progress.active}</span><small>진행 중</small></div></section>
+              <section className="deadline-card tablet-deadline" aria-label="가장 가까운 마감"><div className="deadline-copy"><p className="section-label"><span /> 다음 마감</p><strong>{deadline?.dday || "-"}</strong><p className="deadline-title">{deadline?.task.title || "마감 예정인 과제가 없어요"}</p><p className="deadline-meta">{deadline?.label || "새 과제를 추가해 보세요."}</p></div><div className="progress-ring" style={{ "--progress": `${progress.percent}%` } as CSSProperties} aria-label={`전체 ${tasks.length}개 중 ${progress.completed}개 완료, 진행 중 ${progress.active}개`}><span>{progress.active}</span><small>진행 중</small></div></section>
               <CalendarPanel calendar={calendar} tasks={tasks} />
             </div>
             <div className="tablet-right">{error ? <p className="auth-error" role="alert">{error}</p> : null}<TaskList tasks={tasks} selectedDate={calendar.selectedDate} onToggle={toggleTask} onEdit={(task) => setEditingTask({ ...task })} /></div>
@@ -1332,7 +1332,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
       <AnimatePresence>
         {addOpen ? (
           <TabletModal key="add-assignment" label="새 과제 추가">
-            <header><div><p className="section-label">QUICK ADD</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
+            <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
             <PhotoPicker file={file} onSelect={(selectedFile) => { setFile(selectedFile); setCandidates([]); setAnalysisWarnings([]); }} />
             {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
             <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
@@ -1349,7 +1349,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         ) : null}
         {editingTask ? (
           <TabletModal key={`edit-${editingTask.id}`} label="과제 수정">
-            <header><div><p className="section-label">EDIT TASK</p><h2>과제 수정</h2></div><button onClick={() => setEditingTask(null)} aria-label="닫기"><Cross2Icon /></button></header>
+            <header><div><p className="section-label">과제 수정</p><h2>과제 수정</h2></div><button onClick={() => setEditingTask(null)} aria-label="닫기"><Cross2Icon /></button></header>
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
             <label className="form-field"><span>과제명</span><input value={editingTask.title} onChange={(event) => setEditingTask((task) => task ? { ...task, title: event.target.value } : task)} /></label>
             <label className="form-field"><span>과목</span><input value={editingTask.subject} onChange={(event) => setEditingTask((task) => task ? { ...task, subject: event.target.value } : task)} /></label>
@@ -1363,7 +1363,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         ) : null}
         {calendarSaveOpen ? (
           <TabletModal key="calendar-save" label="캘린더 이미지 저장">
-            <header><div><p className="section-label">SAVE CALENDAR</p><h2>캘린더 이미지 저장</h2></div><button onClick={() => setCalendarSaveOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
+            <header><div><p className="section-label">캘린더 저장</p><h2>캘린더 이미지 저장</h2></div><button onClick={() => setCalendarSaveOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
             <CalendarSaveOptions onSelect={(preset) => void saveCalendarImage(preset)} busy={calendarSaveBusy} />
           </TabletModal>
         ) : null}
