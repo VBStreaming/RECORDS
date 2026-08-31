@@ -166,6 +166,8 @@ function drawCalendarCard(
   height: number,
   palette: { ink: string; muted: string; card: string; line: string; accent: string; selectedInk: string },
 ) {
+  const landscape = width > height;
+
   ctx.fillStyle = palette.card;
   ctx.strokeStyle = palette.line;
   ctx.lineWidth = 2;
@@ -186,7 +188,8 @@ function drawCalendarCard(
   const gridWidth = width - 56;
   const columnWidth = gridWidth / 7;
   const rows = Math.ceil(calendar.cells.length / 7);
-  const rowHeight = (height - 170) / rows;
+  const gridHeight = landscape ? 300 : 430;
+  const rowHeight = (gridHeight - 42) / rows;
   ctx.fillStyle = palette.muted;
   ctx.font = "700 16px Roboto, system-ui, sans-serif";
   weekdays.forEach((weekday, index) => {
@@ -213,21 +216,79 @@ function drawCalendarCard(
     ctx.fillStyle = selected ? palette.selectedInk : palette.ink;
     ctx.font = `${selected ? "900" : "500"} 19px Roboto, system-ui, sans-serif`;
     ctx.fillText(String(day), centerX, dateY);
-    dateTasks.slice(0, 2).forEach((task, taskIndex) => {
-      const taskY = cellTop + 50 + taskIndex * 24;
+    dateTasks.slice(0, 3).forEach((task, taskIndex) => {
       ctx.fillStyle = task.done ? palette.muted : task.color;
-      ctx.font = "700 10px Roboto, system-ui, sans-serif";
-      canvasText(ctx, task.subject, centerX, taskY, columnWidth - 8);
-      ctx.fillStyle = palette.muted;
-      ctx.font = "500 9px Roboto, system-ui, sans-serif";
-      canvasText(ctx, task.time, centerX, taskY + 12, columnWidth - 8);
+      ctx.beginPath();
+      ctx.arc(centerX - (Math.min(dateTasks.length, 3) - 1) * 7 + taskIndex * 14, cellTop + 53, 4, 0, Math.PI * 2);
+      ctx.fill();
     });
-    if (dateTasks.length > 2) {
+    if (dateTasks.length > 3) {
       ctx.fillStyle = palette.muted;
-      ctx.font = "500 8px Roboto, system-ui, sans-serif";
-      canvasText(ctx, `+${dateTasks.length - 2}`, centerX, cellTop + rowHeight - 7, columnWidth - 8);
+      ctx.font = "500 10px Roboto, system-ui, sans-serif";
+      ctx.fillText(`+${dateTasks.length - 3}`, centerX, cellTop + 76);
     }
   });
+
+  const groups = Array.from(
+    tasks
+      .filter((task) => task.date.startsWith(`${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}`))
+      .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
+      .reduce((result, task) => result.set(task.date, [...(result.get(task.date) || []), task]), new Map<string, Task[]>()),
+  );
+  const agendaTop = gridY + gridHeight + 38;
+  ctx.fillStyle = palette.line;
+  ctx.fillRect(x + 28, agendaTop - 22, width - 56, 2);
+  ctx.fillStyle = palette.muted;
+  ctx.font = "700 15px Roboto, system-ui, sans-serif";
+  ctx.fillText("UPCOMING ASSIGNMENTS", x + 28, agendaTop + 14);
+
+  const groupHeight = landscape ? 72 : 92;
+  const visibleGroups = groups.slice(0, Math.max(1, Math.floor((y + height - agendaTop - 36) / groupHeight)));
+  visibleGroups.forEach(([date, dateTasks], groupIndex) => {
+    const groupY = agendaTop + 44 + groupIndex * groupHeight;
+    const day = Number(date.slice(8));
+    const weekday = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "short" }).format(new Date(`${date}T00:00:00+09:00`));
+    ctx.fillStyle = palette.ink;
+    ctx.font = "900 22px Roboto, system-ui, sans-serif";
+    ctx.fillText(String(day), x + 30, groupY + 18);
+    ctx.fillStyle = palette.muted;
+    ctx.font = "500 11px Roboto, system-ui, sans-serif";
+    ctx.fillText(`${calendar.month + 1}월 ${day}일 ${weekday}`, x + 30, groupY + 38);
+
+    dateTasks.slice(0, landscape ? 1 : 2).forEach((task, taskIndex) => {
+      const taskY = groupY + 15 + taskIndex * 34;
+      const taskX = x + (landscape ? 175 : 170);
+      ctx.fillStyle = task.done ? palette.muted : task.color;
+      ctx.beginPath();
+      ctx.arc(taskX, taskY - 5, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = task.done ? palette.muted : palette.ink;
+      ctx.font = "700 13px Roboto, system-ui, sans-serif";
+      canvasText(ctx, task.subject, taskX + 14, taskY, landscape ? 110 : 120);
+      ctx.fillStyle = palette.muted;
+      ctx.font = "500 12px Roboto, system-ui, sans-serif";
+      canvasText(ctx, task.title, taskX + (landscape ? 132 : 142), taskY, width - (taskX - x) - 230);
+      ctx.textAlign = "right";
+      ctx.fillText(task.time, x + width - 30, taskY);
+      ctx.textAlign = "left";
+    });
+    if (dateTasks.length > (landscape ? 1 : 2)) {
+      ctx.fillStyle = palette.muted;
+      ctx.font = "500 10px Roboto, system-ui, sans-serif";
+      ctx.fillText(`+${dateTasks.length - (landscape ? 1 : 2)}개 더 있음`, x + (landscape ? 175 : 170), groupY + groupHeight - 8);
+    }
+    ctx.fillStyle = palette.line;
+    ctx.fillRect(x + 170, groupY + groupHeight - 1, width - 200, 1);
+  });
+  if (!groups.length) {
+    ctx.fillStyle = palette.muted;
+    ctx.font = "500 13px Roboto, system-ui, sans-serif";
+    ctx.fillText("이번 달에 등록된 과제가 없습니다.", x + 28, agendaTop + 54);
+  } else if (visibleGroups.length < groups.length) {
+    ctx.fillStyle = palette.muted;
+    ctx.font = "500 11px Roboto, system-ui, sans-serif";
+    ctx.fillText(`+${groups.length - visibleGroups.length}일의 일정이 더 있습니다.`, x + 28, y + height - 18);
+  }
   ctx.textAlign = "left";
 }
 
@@ -264,7 +325,7 @@ async function downloadCalendarImage(
   const cardX = landscape ? 56 : 48;
   const cardY = 148;
   const cardWidth = landscape ? designWidth - 112 : 904;
-  const cardHeight = landscape ? 730 : Math.min(960, designHeight - 250);
+  const cardHeight = landscape ? Math.min(730, designHeight - 250) : Math.min(1450, designHeight - 250);
   drawCalendarCard(ctx, calendar, tasks, cardX, cardY, cardWidth, cardHeight, palette);
 
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("이미지를 저장할 수 없습니다.")), "image/png"));
@@ -290,7 +351,7 @@ async function downloadCalendarImage(
 function CalendarSaveOptions({ onSelect, busy }: { onSelect: (preset: CalendarImagePreset) => void; busy: boolean }) {
   return (
     <div className="calendar-save-options">
-      <p>저장할 배경화면 비율을 선택하세요.</p>
+      <p>월간 그리드와 날짜별 과목·시간을 배경화면으로 저장하세요.</p>
       <div className="calendar-save-grid">
         {calendarImagePresets.map((preset) => (
           <button key={preset.id} className="calendar-save-option" onClick={() => onSelect(preset)} disabled={busy} aria-label={`${preset.label}로 저장`}>
@@ -1246,7 +1307,6 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <nav>
           <button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")} aria-current={view === "dashboard" ? "page" : undefined}><DashboardIcon />대시보드</button>
           <button className={view === "calendar" ? "active" : ""} onClick={() => setView("calendar")} aria-current={view === "calendar" ? "page" : undefined}><CalendarIcon />월간 달력</button>
-          <button><CameraIcon />사진 보관함</button>
         </nav>
         <div className="student-card"><span>{profile?.studentNumber || "-"}</span><strong>{profile?.name || "사용자"}</strong><small>{profile?.email || "-"}</small></div>
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>

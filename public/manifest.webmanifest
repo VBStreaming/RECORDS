@@ -2,7 +2,7 @@
   "id": "/",
   "name": "RECORDS 과제 플래너",
   "short_name": "RECORDS",
-  "description": "사진과 일정으로 과제를 기록하는 플래너",
+  "description": "과제와 일정을 기록하는 플래너",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
