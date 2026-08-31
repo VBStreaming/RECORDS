@@ -396,7 +396,7 @@ function todayInSeoul() {
 }
 
 function todayLabel() {
-  return new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", weekday: "long", month: "long", day: "numeric" }).format(new Date()).toUpperCase().replace(", ", " · ");
+  return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "long", month: "long", day: "numeric" }).format(new Date());
 }
 
 function dueAt(date: string, time: string) {
