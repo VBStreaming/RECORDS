@@ -121,6 +121,10 @@ test("existing unverified signup resumes on the verification page", async ({ pag
 
   await expect(page).toHaveURL(/\/check-email$/);
   await expect(page.getByRole("heading", { name: "인증 코드를 입력해 주세요." })).toBeVisible();
+  await expect(page.locator(".tablet-auth-brand")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".tablet-auth-brand")).toBeHidden();
+  expect(await page.evaluate(() => document.activeElement?.id)).not.toBe("verification-code");
 });
 
 test("duplicate signup keeps the duplicate email error when credentials do not match", async ({ page }) => {

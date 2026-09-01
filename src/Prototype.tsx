@@ -755,28 +755,33 @@ function VerificationPendingPage() {
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme: () => setTheme(nextTheme) }}>
-      <div className={`auth-link-page theme-${theme}`}>
-        <motion.main className="auth-link-card auth-check-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-          <header><Brand /><ThemeButton /></header>
-          <p className="section-label">이메일 인증</p>
-          <h1>{status === "success" ? "인증이 완료됐어요." : "인증 코드를 입력해 주세요."}</h1>
-          <p className="auth-link-description">{status === "success" ? "확인이 끝났습니다. 바로 서비스를 시작할 수 있어요." : <><strong>{email || "가입한 이메일"}</strong>로 인증 코드를 보냈어요.</>}</p>
-          {status === "success" ? (
-            <>
-              <div className="auth-link-result success" role="status"><span className="auth-result-icon"><CheckIcon /></span><p>{message}</p></div>
-              <button className="auth-submit auth-link-primary" type="button" onClick={() => window.location.assign("/?screen=dashboard")}>서비스 시작하기</button>
-            </>
-          ) : (
-            <form className="verification-code-form" onSubmit={verifyCode} noValidate>
-              <label htmlFor="verification-code">5자리 인증 코드</label>
-              <input id="verification-code" className="verification-code-input" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 5))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{5}" maxLength={5} placeholder="00000" autoFocus aria-invalid={status === "error"} />
-              <p className={status === "error" ? "auth-error" : "verification-help"} aria-live="polite">{message}</p>
-              <button className="auth-submit" type="submit" disabled={busy || code.length !== 5}>{busy ? "확인 중..." : "인증 코드 확인"}</button>
-              <button className="verification-resend" type="button" onClick={() => void resend()} disabled={busy || !email}>인증 코드 다시 보내기</button>
-            </form>
-          )}
-          {status !== "success" ? <p className="auth-switch"><button type="button" onClick={openLoginPage}>로그인으로 돌아가기</button></p> : null}
-        </motion.main>
+      <div className={`tablet-app theme-${theme}`}>
+        <main className="tablet-auth">
+          <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>RECORDS · 학생 플래너</small></section>
+          <section className="tablet-auth-form">
+            <ThemeButton />
+            <motion.div className="tablet-form-wrap" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+              <p className="section-label">이메일 인증</p>
+              <h2>{status === "success" ? "인증이 완료됐어요." : "인증 코드를 입력해 주세요."}</h2>
+              <p>{status === "success" ? "확인이 끝났습니다. 바로 서비스를 시작할 수 있어요." : <><strong>{email || "가입한 이메일"}</strong>로 인증 코드를 보냈어요.</>}</p>
+              {status === "success" ? (
+                <>
+                  <div className="auth-link-result success" role="status"><span className="auth-result-icon"><CheckIcon /></span><p>{message}</p></div>
+                  <button className="auth-submit auth-link-primary" type="button" onClick={() => window.location.assign("/?screen=dashboard")}>서비스 시작하기</button>
+                </>
+              ) : (
+                <form className="verification-code-form" onSubmit={verifyCode} noValidate>
+                  <label htmlFor="verification-code">5자리 인증 코드</label>
+                  <input id="verification-code" className="verification-code-input" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 5))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{5}" maxLength={5} placeholder="00000" aria-invalid={status === "error"} />
+                  <p className={status === "error" ? "auth-error" : "verification-help"} aria-live="polite">{message}</p>
+                  <button className="auth-submit" type="submit" disabled={busy || code.length !== 5}>{busy ? "확인 중..." : "인증 코드 확인"}</button>
+                  <button className="verification-resend" type="button" onClick={() => void resend()} disabled={busy || !email}>인증 코드 다시 보내기</button>
+                </form>
+              )}
+              {status !== "success" ? <p className="auth-switch"><button type="button" onClick={openLoginPage}>로그인으로 돌아가기</button></p> : null}
+            </motion.div>
+          </section>
+        </main>
       </div>
     </ThemeContext.Provider>
   );
