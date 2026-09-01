@@ -92,6 +92,8 @@ body {
 
 html:has(.tablet-app.theme-light),
 body:has(.tablet-app.theme-light),
+html:has(.auth-link-page.theme-light),
+body:has(.auth-link-page.theme-light),
 html:has(.device-screen[data-theme="light"]),
 body:has(.device-screen[data-theme="light"]) {
   background: #f4f1eb;
@@ -106,7 +108,9 @@ body,
 .device-screen,
 .device-screen *,
 .device-screen *::before,
-.device-screen *::after {
+.device-screen *::after,
+.auth-link-page,
+.auth-link-page * {
   transition: background-color 220ms ease, color 180ms ease, border-color 220ms ease, box-shadow 220ms ease;
 }
 
@@ -1018,7 +1022,8 @@ button {
 }
 
 .device-screen[data-theme="light"],
-.tablet-app.theme-light {
+.tablet-app.theme-light,
+.auth-link-page.theme-light {
   --bg: #f4f1eb;
   --ink: #1b1d1f;
   --muted: #74787a;
@@ -1195,6 +1200,17 @@ button {
   font-size: 10px;
 }
 
+.auth-text-button {
+  justify-self: end;
+  margin-top: -4px;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .auth-submit {
   width: 100%;
   height: 50px;
@@ -1220,6 +1236,166 @@ button {
   color: var(--accent);
   background: transparent;
   font-weight: 800;
+}
+
+.auth-result-icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.auth-result-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.auth-link-page {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 32px 20px;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: "Roboto", system-ui, sans-serif;
+}
+
+.auth-link-card {
+  box-sizing: border-box;
+  width: min(440px, 100%);
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .12);
+}
+
+.auth-link-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 52px;
+}
+
+.auth-link-card h1 {
+  margin: 10px 0;
+  font-size: 32px;
+  letter-spacing: -.05em;
+}
+
+.auth-link-description,
+.auth-link-result p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.auth-link-card .auth-form {
+  margin-top: 30px;
+}
+
+.auth-link-primary {
+  margin-top: 18px;
+}
+
+.verification-code-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.verification-code-form > label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.verification-code-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 68px;
+  padding: 0 20px 0 30px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  outline: none;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: .34em;
+  text-align: center;
+}
+
+.verification-code-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.verification-code-input[aria-invalid="true"] {
+  border-color: #e35353;
+}
+
+.verification-help {
+  min-height: 16px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.verification-code-form .auth-error {
+  min-height: 16px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.verification-resend {
+  justify-self: center;
+  padding: 4px;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.auth-link-result {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  min-height: 150px;
+  align-content: center;
+  margin-top: 28px;
+  padding: 22px;
+  border-radius: 18px;
+  text-align: center;
+  background: var(--surface-soft);
+}
+
+.auth-link-result.error .auth-result-icon {
+  color: #e35353;
+  background: color-mix(in srgb, #e35353 14%, transparent);
+}
+
+@media (max-width: 520px) {
+  .auth-link-page {
+    place-items: stretch;
+    padding: 0;
+  }
+
+  .auth-link-card {
+    min-height: 100dvh;
+    padding: 48px 22px calc(env(safe-area-inset-bottom, 0px) + 30px);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
 }
 
 .tablet-app {

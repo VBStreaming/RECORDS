@@ -18,6 +18,8 @@
 
 로그인 성공 후 access·refresh token을 `localStorage`에 저장한다. access token이 `401`이면 같은 탭의 `refreshInFlight`와 origin 단위 Web Locks API로 refresh rotation을 조정한 뒤 원 요청을 한 번 재시도한다. Web Locks가 없는 Safari 계열은 만료 시간이 있는 localStorage lease로 같은 동작을 보장한다. 실제 invalid refresh일 때만 저장된 token과 offline cache를 지우고 `records:auth-expired`를 발생시킨다.
 
+신규 가입자는 별도 `/check-email` 화면으로 이동해 이메일로 받은 숫자 5자리 코드를 입력한다. 미인증 로그인도 같은 화면과 재발송 버튼을 제공한다. 코드 확인 성공 시 access·refresh token을 저장하고 완료 화면의 `서비스 시작하기` 버튼으로 대시보드에 진입한다. 비밀번호 찾기와 재설정 링크는 `/forgot-password`, `/reset-password`에서 처리하며 Vercel rewrite가 새로고침과 직접 진입을 지원한다.
+
 새로고침·동시 API 요청·여러 탭·offline sync가 refresh rotation과 겹치는 회귀 테스트를 추가했고, 먼저 성공한 새 token을 뒤늦은 요청이 지우지 않도록 처리했다.
 
 ### AI 사진 분석
@@ -26,7 +28,7 @@
 
 ### 사진 저장
 
-`downloadCalendarImage()`는 canvas로 월간 달력을 PNG로 만든다. Web Share 파일 공유를 지원하면 iOS·Android 공유 시트를 먼저 열고, 지원하지 않으면 브라우저 다운로드로 저장한다. 과제에 사용한 원본 사진은 서버에 저장하지 않는다.
+`downloadCalendarImage()`는 canvas로 월간 달력을 PNG로 만든 뒤 공유창 없이 브라우저 다운로드로 저장한다. 과제에 사용한 원본 사진은 서버에 저장하지 않는다. `사진으로 추가`는 `accept="image/*"` 파일 입력을 직접 열고 `capture`를 지정하지 않아 모바일 OS가 카메라와 사진 보관함 선택지를 제공한다.
 
 ### 알림
 

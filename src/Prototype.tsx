@@ -48,6 +48,8 @@ import {
 import {
   clearToken,
   completeAssignment,
+  confirmEmailVerification,
+  confirmPasswordReset,
   createAssignment,
   extractAssignment,
   hasToken,
@@ -57,6 +59,8 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   me,
+  requestEmailVerification,
+  requestPasswordReset,
   RecordsApiError,
   signup,
   getNotificationPreferences,
@@ -117,6 +121,7 @@ const calendarImagePresets: CalendarImagePreset[] = [
 
 const ThemeContext = createContext<{ theme: Theme; toggleTheme: () => void } | null>(null);
 const THEME_KEY = "records-theme";
+const PENDING_EMAIL_KEY = "records-pending-verification-email";
 
 function useTheme() {
   const value = useContext(ThemeContext);
@@ -137,6 +142,38 @@ function nextTheme(current: Theme): Theme {
   const next = current === "dark" ? "light" : "dark";
   localStorage.setItem(THEME_KEY, next);
   return next;
+}
+
+function openEmailVerificationPage(email: string) {
+  sessionStorage.setItem(PENDING_EMAIL_KEY, email);
+  window.location.assign("/check-email");
+}
+
+async function openEmailVerificationPageWithFreshCode(email: string) {
+  await requestEmailVerification(email).catch(() => undefined);
+  openEmailVerificationPage(email);
+}
+
+async function signupOrResume(name: string, email: string, studentId: string, password: string) {
+  try {
+    await signup(name, email, studentId, password);
+    return false;
+  } catch (error) {
+    if (!(error instanceof RecordsApiError) || error.code !== "EMAIL_ALREADY_EXISTS") throw error;
+    await login(email, password);
+    return true;
+  }
+}
+
+function openLoginPage() {
+  const email = sessionStorage.getItem(PENDING_EMAIL_KEY);
+  const query = new URLSearchParams({ screen: "login" });
+  if (email) query.set("email", email);
+  window.location.assign(`/?${query}`);
+}
+
+function loginEmailFromUrl() {
+  return new URLSearchParams(window.location.search).get("email") || "";
 }
 
 function isoDate(year: number, month: number, day: number) {
@@ -331,22 +368,15 @@ async function downloadCalendarImage(
 
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("이미지를 저장할 수 없습니다.")), "image/png"));
   const filename = `records-calendar-${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}-${preset.id}.png`;
-  const file = new File([blob], filename, { type: "image/png" });
-  if (navigator.share && navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: "RECORDS 캘린더" });
-      return;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-    }
-  }
-
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
+  anchor.hidden = true;
+  document.body.appendChild(anchor);
   anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function CalendarSaveOptions({ onSelect, busy }: { onSelect: (preset: CalendarImagePreset) => void; busy: boolean }) {
@@ -673,6 +703,160 @@ function AuthField({ icon, label, ...props }: InputHTMLAttributes<HTMLInputEleme
   );
 }
 
+function VerificationPendingPage() {
+  const [theme, setTheme] = useState<Theme>(themeFromUrl);
+  const email = sessionStorage.getItem(PENDING_EMAIL_KEY) || "";
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [message, setMessage] = useState("이메일로 보낸 5자리 코드를 입력해 주세요. 코드는 10분 동안 유효합니다.");
+
+  const verifyCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!email || !/^[0-9]{5}$/.test(code)) {
+      setStatus("error");
+      setMessage("이메일로 받은 숫자 5자리를 입력해 주세요.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await confirmEmailVerification(email, code);
+      sessionStorage.removeItem(PENDING_EMAIL_KEY);
+      setStatus("success");
+      setMessage("이메일 인증이 완료되었습니다. 이제 RECORDS를 사용할 수 있어요.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(apiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resend = async () => {
+    if (!email) return;
+    setBusy(true);
+    try {
+      await requestEmailVerification(email);
+      setCode("");
+      setStatus("idle");
+      setMessage("새 인증 코드를 보냈습니다. 가장 최근에 받은 코드를 입력해 주세요.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(apiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme: () => setTheme(nextTheme) }}>
+      <div className={`auth-link-page theme-${theme}`}>
+        <motion.main className="auth-link-card auth-check-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <header><Brand /><ThemeButton /></header>
+          <p className="section-label">이메일 인증</p>
+          <h1>{status === "success" ? "인증이 완료됐어요." : "인증 코드를 입력해 주세요."}</h1>
+          <p className="auth-link-description">{status === "success" ? "확인이 끝났습니다. 바로 서비스를 시작할 수 있어요." : <><strong>{email || "가입한 이메일"}</strong>로 인증 코드를 보냈어요.</>}</p>
+          {status === "success" ? (
+            <>
+              <div className="auth-link-result success" role="status"><span className="auth-result-icon"><CheckIcon /></span><p>{message}</p></div>
+              <button className="auth-submit auth-link-primary" type="button" onClick={() => window.location.assign("/?screen=dashboard")}>서비스 시작하기</button>
+            </>
+          ) : (
+            <form className="verification-code-form" onSubmit={verifyCode} noValidate>
+              <label htmlFor="verification-code">5자리 인증 코드</label>
+              <input id="verification-code" className="verification-code-input" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 5))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{5}" maxLength={5} placeholder="00000" autoFocus aria-invalid={status === "error"} />
+              <p className={status === "error" ? "auth-error" : "verification-help"} aria-live="polite">{message}</p>
+              <button className="auth-submit" type="submit" disabled={busy || code.length !== 5}>{busy ? "확인 중..." : "인증 코드 확인"}</button>
+              <button className="verification-resend" type="button" onClick={() => void resend()} disabled={busy || !email}>인증 코드 다시 보내기</button>
+            </form>
+          )}
+          {status !== "success" ? <p className="auth-switch"><button type="button" onClick={openLoginPage}>로그인으로 돌아가기</button></p> : null}
+        </motion.main>
+      </div>
+    </ThemeContext.Provider>
+  );
+}
+
+type AuthLinkKind = "forgot" | "reset";
+
+function AuthLinkPage({ kind }: { kind: AuthLinkKind }) {
+  const [theme, setTheme] = useState<Theme>(themeFromUrl);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const token = new URLSearchParams(window.location.search).get("token") || "";
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage("");
+    if (kind === "forgot") {
+      if (!email.includes("@")) { setStatus("error"); setMessage("이메일을 올바르게 입력해 주세요."); return; }
+      setBusy(true);
+      try {
+        await requestPasswordReset(email.trim());
+        setStatus("success");
+        setMessage("계정이 존재하면 비밀번호 재설정 메일을 보내드립니다.");
+      } catch (error) {
+        setStatus("error");
+        setMessage(apiErrorMessage(error));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (!token) { setStatus("error"); setMessage("재설정 링크가 올바르지 않습니다."); return; }
+    if (password.length < 10 || password !== passwordConfirm) {
+      setStatus("error");
+      setMessage("10자 이상의 동일한 비밀번호를 입력해 주세요.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await confirmPasswordReset(token, password);
+      setStatus("success");
+      setMessage("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(apiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const title = kind === "forgot" ? "비밀번호를 잊으셨나요?" : "새 비밀번호 설정";
+  const description = kind === "forgot" ? "가입한 이메일로 재설정 링크를 보내드려요." : "앞으로 사용할 비밀번호를 입력해 주세요.";
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme: () => setTheme(nextTheme) }}>
+      <div className={`auth-link-page theme-${theme}`}>
+        <motion.main className="auth-link-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <header><Brand /><ThemeButton /></header>
+          <p className="section-label">계정 보안</p>
+          <h1>{title}</h1>
+          <p className="auth-link-description">{description}</p>
+          {status === "success" ? (
+            <div className="auth-link-result success" role="status"><span className="auth-result-icon"><CheckIcon /></span><p>{message}</p></div>
+          ) : (
+            <form className="auth-form" onSubmit={submit} noValidate>
+              {kind === "forgot" ? <AuthField icon={<EnvelopeClosedIcon />} label="이메일" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="student@school.kr" /> : (
+                <>
+                  <AuthField icon={<LockClosedIcon />} label="새 비밀번호" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="10자 이상 입력해 주세요" />
+                  <AuthField icon={<LockClosedIcon />} label="새 비밀번호 확인" type="password" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} placeholder="한 번 더 입력해 주세요" />
+                </>
+              )}
+              {message ? <p className="auth-error" role="alert">{message}</p> : null}
+              <button className="auth-submit" type="submit" disabled={busy}>{busy ? "처리 중..." : kind === "forgot" ? "재설정 메일 받기" : "비밀번호 변경"}</button>
+            </form>
+          )}
+          <p className="auth-switch"><button type="button" onClick={openLoginPage}>로그인으로 돌아가기</button></p>
+        </motion.main>
+      </div>
+    </ThemeContext.Provider>
+  );
+}
+
 function requestLoginNotificationPermission() {
   if (!isWebPushConfigured()) return null;
   const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -692,7 +876,7 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
   const { theme } = useTheme();
   const [studentId, setStudentId] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => mode === "login" ? loginEmailFromUrl() : "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -710,11 +894,24 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
     const permissionRequest = mode === "login" ? requestLoginNotificationPermission()?.catch(() => null) ?? null : null;
     setSubmitting(true);
     try {
-      if (mode === "signup") await signup(name.trim(), email.trim(), studentId.trim(), password);
-      else await login(email.trim(), password);
+      if (mode === "signup") {
+        const signedIn = await signupOrResume(name.trim(), email.trim(), studentId.trim(), password);
+        if (signedIn) {
+          onSuccess();
+          return;
+        }
+        openEmailVerificationPage(email.trim());
+        return;
+      } else {
+        await login(email.trim(), password);
+      }
       onSuccess();
       if (permissionRequest) void permissionRequest.then((permission) => permission === "granted" ? enableWebPush(registerPushSubscription, permission) : undefined).catch(() => undefined);
     } catch (submitError) {
+      if (submitError instanceof RecordsApiError && submitError.code === "EMAIL_NOT_VERIFIED") {
+        await openEmailVerificationPageWithFreshCode(email.trim());
+        return;
+      }
       setError(apiErrorMessage(submitError));
     } finally {
       setSubmitting(false);
@@ -742,12 +939,13 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
             <span>비밀번호</span>
             <div>
               <LockClosedIcon />
-              <input aria-label="비밀번호" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="8자 이상 입력해 주세요" />
+              <input aria-label="비밀번호" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="10자 이상 입력해 주세요" />
               <button type="button" className="password-toggle" onClick={() => setShowPassword((current) => !current)} aria-label="비밀번호 표시 전환">
                 {showPassword ? <EyeClosedIcon /> : <EyeOpenIcon />}
               </button>
             </div>
           </label>
+          {mode === "login" ? <button className="auth-text-button" type="button" onClick={() => window.location.assign("/forgot-password")}>비밀번호를 잊으셨나요?</button> : null}
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
           <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? "처리 중..." : mode === "login" ? "로그인" : "회원가입 완료"}</button>
         </form>
@@ -825,7 +1023,7 @@ function TaskList({ tasks, selectedDate, onToggle, onEdit }: { tasks: Task[]; se
   );
 }
 
-function PhotoPicker({ file, capture, onSelect }: { file: File | null; capture?: "environment"; onSelect: (file: File) => void }) {
+function PhotoPicker({ file, onSelect }: { file: File | null; onSelect: (file: File) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="photo-field">
@@ -837,7 +1035,6 @@ function PhotoPicker({ file, capture, onSelect }: { file: File | null; capture?:
         ref={inputRef}
         type="file"
         accept="image/*"
-        {...(capture ? { capture } : {})}
         onChange={(event) => {
           const selectedFile = event.currentTarget.files?.[0];
           event.currentTarget.value = "";
@@ -908,6 +1105,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const calendar = useCalendar(tasks);
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
@@ -1044,13 +1242,23 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       </MobileScroll>
       {portalReady && screenRef.current ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
-          <button className="photo-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }}><CameraIcon /> 사진으로 추가</button>
+          <button className="photo-button" onClick={() => photoInputRef.current?.click()}><CameraIcon /> 사진으로 추가</button>
           <button className="plus-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }} aria-label="직접 과제 추가"><PlusIcon /></button>
         </nav>, screenRef.current,
       ) : null}
+      <input ref={photoInputRef} hidden type="file" accept="image/*" onChange={(event) => {
+        const selectedFile = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        if (!selectedFile) return;
+        setFile(selectedFile);
+        setCandidates([]);
+        setAnalysisWarnings([]);
+        setDueDate(calendar.selectedDate);
+        setSheetOpen(true);
+      }} />
       <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen} title="새 과제 추가" description="사진 한 장과 필수 정보만 빠르게 기록해요." snap={0.86}>
         <div className="add-form">
-          <PhotoPicker file={file} capture="environment" onSelect={(selectedFile) => { setFile(selectedFile); setCandidates([]); setAnalysisWarnings([]); }} />
+          <PhotoPicker file={file} onSelect={(selectedFile) => { setFile(selectedFile); setCandidates([]); setAnalysisWarnings([]); }} />
           {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
           <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
@@ -1129,7 +1337,7 @@ function TabletInput({ icon, label, ...props }: InputHTMLAttributes<HTMLInputEle
 function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mode: AuthMode) => void; onSuccess: () => void }) {
   const [studentId, setStudentId] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => mode === "login" ? loginEmailFromUrl() : "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1143,11 +1351,24 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
     setSubmitting(true);
     const permissionRequest = mode === "login" ? requestLoginNotificationPermission()?.catch(() => null) ?? null : null;
     try {
-      if (mode === "signup") await signup(name.trim(), email.trim(), studentId.trim(), password);
-      else await login(email.trim(), password);
+      if (mode === "signup") {
+        const signedIn = await signupOrResume(name.trim(), email.trim(), studentId.trim(), password);
+        if (signedIn) {
+          onSuccess();
+          return;
+        }
+        openEmailVerificationPage(email.trim());
+        return;
+      } else {
+        await login(email.trim(), password);
+      }
       onSuccess();
       if (permissionRequest) void permissionRequest.then((permission) => permission === "granted" ? enableWebPush(registerPushSubscription, permission) : undefined).catch(() => undefined);
     } catch (submitError) {
+      if (submitError instanceof RecordsApiError && submitError.code === "EMAIL_NOT_VERIFIED") {
+        await openEmailVerificationPageWithFreshCode(email.trim());
+        return;
+      }
       setError(apiErrorMessage(submitError));
     } finally {
       setSubmitting(false);
@@ -1165,7 +1386,8 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
           <form onSubmit={submit} noValidate>
             {mode === "signup" ? <><TabletInput icon={<IdCardIcon />} label="학번" value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="20514" inputMode="numeric" pattern="[0-9]{5}" required /><TabletInput icon={<PersonIcon />} label="이름" value={name} onChange={(event) => setName(event.target.value)} placeholder="이름" required /></> : null}
             <TabletInput icon={<EnvelopeClosedIcon />} label="이메일" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="student@school.kr" required />
-            <TabletInput icon={<LockClosedIcon />} label="비밀번호" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="8자 이상" minLength={mode === "signup" ? 10 : undefined} required />
+            <TabletInput icon={<LockClosedIcon />} label="비밀번호" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="10자 이상" minLength={mode === "signup" ? 10 : undefined} required />
+            {mode === "login" ? <button className="auth-text-button" type="button" onClick={() => window.location.assign("/forgot-password")}>비밀번호를 잊으셨나요?</button> : null}
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
             <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? "처리 중..." : mode === "login" ? "로그인" : "회원가입 완료"}</button>
           </form>
@@ -1197,6 +1419,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const calendar = useCalendar(tasks);
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
@@ -1303,6 +1526,16 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   };
   return (
     <main className="tablet-dashboard">
+      <input ref={photoInputRef} hidden type="file" accept="image/*" onChange={(event) => {
+        const selectedFile = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        if (!selectedFile) return;
+        setFile(selectedFile);
+        setCandidates([]);
+        setAnalysisWarnings([]);
+        setDueDate(calendar.selectedDate);
+        setAddOpen(true);
+      }} />
       <aside className="tablet-sidebar">
         <Brand />
         <nav>
@@ -1313,7 +1546,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
       </aside>
       <section className="tablet-content">
-        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><CameraIcon />사진으로 추가</button></div></header>
+        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => photoInputRef.current?.click()}><CameraIcon />사진으로 추가</button><button className="icon-button" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }} aria-label="직접 과제 추가"><PlusIcon /></button></div></header>
         {view === "dashboard" ? (
           <div className="tablet-grid">
             <div className="tablet-left">
@@ -1398,6 +1631,9 @@ function TabletWebPrototype() {
 
 export function WebPrototype() {
   const isMobile = useMobileViewport();
+  if (window.location.pathname === "/check-email") return <VerificationPendingPage />;
+  if (window.location.pathname === "/forgot-password") return <AuthLinkPage kind="forgot" />;
+  if (window.location.pathname === "/reset-password") return <AuthLinkPage kind="reset" />;
   const app = isMobile
     ? <MobileRuntime><Prototype /></MobileRuntime>
     : <TabletWebPrototype />;

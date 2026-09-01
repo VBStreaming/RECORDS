@@ -44,4 +44,20 @@
 
 - P3: connect real authentication, server persistence, and password recovery only when this visual prototype moves into production scope.
 
-final result: passed
+## Email Verification Flow Iteration — 2026-09-01
+
+- Source visual truth: `/var/folders/b5/20yn5mzs68bb5lwvtsl4q65m0000gn/T/TemporaryItems/NSIRD_screencaptureui_DaqiuH/스크린샷 2026-09-01 오후 5.25.23.png`
+- Source dimensions: 1044 x 1360 px; tablet signup state, light theme
+- Intended change: replace the inline signup validation state with a dedicated 5-digit email-code entry page and a dedicated verification-complete page
+- Implementation screenshot: unavailable
+- Tested viewports: 1024 x 768 and 390 x 844 through the authentication Playwright flow
+- Functional evidence: signup and unverified login navigate to `/check-email`; resend calls the API; only a numeric 5-digit code can be submitted; confirmation stores access and refresh tokens; completion CTA opens the dashboard
+- Automated verification: runtime integrity passed, production build passed, focused authentication flow passed
+- Browser-rendered comparison: blocked because both the in-app browser and connected Chrome browser were unavailable in this session
+
+### Current Findings
+
+- No functional P0/P1 issue was found by the focused authentication test.
+- Typography, spacing, colors, icons, and copy cannot be marked visually passed without a browser-rendered implementation capture.
+
+final result: blocked

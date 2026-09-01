@@ -12,7 +12,7 @@ export const OFFLINE_SYNC_EVENT = "records:offline-sync";
 export const CONNECTION_STATUS_EVENT = "records:connection-status";
 export const NOTIFICATIONS_EVENT = "records:notifications";
 
-export type User = { id: string; name: string; email: string; studentNumber: string };
+export type User = { id: string; name: string; email: string; studentNumber: string; emailVerified?: boolean };
 export type Assignment = {
   id: string;
   title: string;
@@ -314,11 +314,29 @@ export async function login(email: string, password: string) {
 }
 
 export async function signup(name: string, email: string, studentNumber: string, password: string) {
-  await request<User>("/auth/signup", {
+  return request<User>("/auth/signup", {
     method: "POST",
     body: JSON.stringify({ name, email, studentNumber, password }),
   });
-  await login(email, password);
+}
+
+export function requestEmailVerification(email: string) {
+  return request<void>("/auth/email-verification/request", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export function confirmEmailVerification(email: string, code: string) {
+  return request<{ accessToken: string; refreshToken: string }>("/auth/email-verification/confirm", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  }).then((tokens) => saveTokens(tokens));
+}
+
+export function requestPasswordReset(email: string) {
+  return request<void>("/auth/password-reset/request", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export function confirmPasswordReset(token: string, newPassword: string) {
+  return request<void>("/auth/password-reset/confirm", { method: "POST", body: JSON.stringify({ token, newPassword }) });
 }
 
 export function me() {

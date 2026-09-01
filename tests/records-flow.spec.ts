@@ -1,5 +1,127 @@
 import { readFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function chooseAssignmentPhoto(page: Page) {
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "사진으로 추가" }).click();
+  await (await chooser).setFiles({
+    name: "assignment.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+  });
+}
+
+test("email verification and password reset flows are connected", async ({ page }) => {
+  const calls: string[] = [];
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/auth/signup") {
+      calls.push(path);
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "student@example.com", studentNumber: "20514", emailVerified: false } }) });
+      return;
+    }
+    if (path === "/auth/login") {
+      calls.push(path);
+      await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ success: false, error: { code: "EMAIL_NOT_VERIFIED", message: "이메일 인증이 필요합니다." } }) });
+      return;
+    }
+    if (path === "/auth/email-verification/confirm") {
+      calls.push(path);
+      expect(request.postDataJSON()).toEqual({ email: "student@example.com", code: "12345" });
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { accessToken: "verified-access", refreshToken: "verified-refresh" } }) });
+      return;
+    }
+    if (["/auth/email-verification/request", "/auth/password-reset/request", "/auth/password-reset/confirm"].includes(path)) {
+      calls.push(path);
+      if (path === "/auth/password-reset/confirm") {
+        expect(request.postDataJSON()).toEqual({ token: "reset-token", newPassword: "new-records-password" });
+      }
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?screen=signup&theme=light");
+  await page.getByRole("textbox", { name: "학번" }).fill("20514");
+  await page.getByRole("textbox", { name: "이름" }).fill("테스트");
+  await page.getByRole("textbox", { name: "이메일" }).fill("student@example.com");
+  await page.getByRole("textbox", { name: "비밀번호" }).fill("records-password");
+  await page.getByRole("button", { name: "회원가입 완료" }).click();
+  await expect(page).toHaveURL(/\/check-email$/);
+  await expect(page.getByRole("heading", { name: "인증 코드를 입력해 주세요." })).toBeVisible();
+  await page.getByRole("button", { name: "인증 코드 다시 보내기" }).click();
+  await expect(page.getByText("새 인증 코드를 보냈습니다. 가장 최근에 받은 코드를 입력해 주세요.")).toBeVisible();
+  await page.getByRole("button", { name: "로그인으로 돌아가기" }).click();
+
+  await page.getByRole("textbox", { name: "이메일" }).fill("student@example.com");
+  await page.getByRole("textbox", { name: "비밀번호" }).fill("records-password");
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(page).toHaveURL(/\/check-email$/);
+  await page.getByRole("textbox", { name: "5자리 인증 코드" }).fill("12345");
+  await page.getByRole("button", { name: "인증 코드 확인" }).click();
+  await expect(page.getByRole("heading", { name: "인증이 완료됐어요." })).toBeVisible();
+  await expect(page.getByText("이메일 인증이 완료되었습니다. 이제 RECORDS를 사용할 수 있어요.")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("records-access-token"))).toBe("verified-access");
+  await page.getByRole("button", { name: "서비스 시작하기" }).click();
+  await expect(page).toHaveURL(/\?screen=dashboard$/);
+
+  await page.goto("/forgot-password");
+  await expect(page).toHaveURL(/\/forgot-password$/);
+  await page.getByRole("textbox", { name: "이메일" }).fill("student@example.com");
+  await page.getByRole("button", { name: "재설정 메일 받기" }).click();
+  await expect(page.getByText("계정이 존재하면 비밀번호 재설정 메일을 보내드립니다.")).toBeVisible();
+
+  await page.goto("/reset-password?token=reset-token");
+  await page.getByRole("textbox", { name: "새 비밀번호", exact: true }).fill("new-records-password");
+  await page.getByRole("textbox", { name: "새 비밀번호 확인" }).fill("new-records-password");
+  await page.getByRole("button", { name: "비밀번호 변경" }).click();
+  await expect(page.getByText("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.")).toBeVisible();
+
+  expect(calls).toEqual(expect.arrayContaining([
+    "/auth/signup",
+    "/auth/login",
+    "/auth/email-verification/request",
+    "/auth/email-verification/confirm",
+    "/auth/password-reset/request",
+    "/auth/password-reset/confirm",
+  ]));
+  expect(calls.filter((path) => path === "/auth/email-verification/confirm")).toHaveLength(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("existing unverified signup resumes on the verification page", async ({ page }) => {
+  await page.route("**/auth/signup", (route) => route.fulfill({
+    status: 409,
+    contentType: "application/json",
+    body: JSON.stringify({ success: false, error: { code: "EMAIL_ALREADY_EXISTS", message: "이미 사용 중인 이메일입니다." } }),
+  }));
+  await page.route("**/auth/login", (route) => route.fulfill({
+    status: 403,
+    contentType: "application/json",
+    body: JSON.stringify({ success: false, error: { code: "EMAIL_NOT_VERIFIED", message: "이메일 인증이 필요합니다." } }),
+  }));
+  await page.route("**/auth/email-verification/request", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ success: true }),
+  }));
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?screen=signup&theme=light");
+  await page.getByRole("textbox", { name: "학번" }).fill("20000");
+  await page.getByRole("textbox", { name: "이름" }).fill("gg");
+  await page.getByRole("textbox", { name: "이메일" }).fill("sss20090529@gmail.com");
+  await page.getByRole("textbox", { name: "비밀번호" }).fill("records-password");
+  await page.getByRole("button", { name: "회원가입 완료" }).click();
+
+  await expect(page).toHaveURL(/\/check-email$/);
+  await expect(page.getByRole("heading", { name: "인증 코드를 입력해 주세요." })).toBeVisible();
+});
 
 test("responsive signup, calendar, task edit and dashboard flows work", async ({ page }) => {
   const email = `records-flow-${Date.now()}@example.com`;
@@ -22,7 +144,7 @@ test("responsive signup, calendar, task edit and dashboard flows work", async ({
   const today = `${todayParts.find((part) => part.type === "month")?.value}월 ${todayParts.find((part) => part.type === "day")?.value}일`;
   await page.getByRole("button", { name: today }).click();
   await page.getByRole("button", { name: "대시보드" }).click();
-  await page.getByRole("button", { name: "사진으로 추가" }).click();
+  await chooseAssignmentPhoto(page);
   const modalLayout = await page.evaluate(() => {
     const sidebar = document.querySelector(".tablet-sidebar")!.getBoundingClientRect();
     const content = document.querySelector(".tablet-content")!.getBoundingClientRect();
@@ -126,7 +248,7 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
     return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date);
   });
   const [nextYear, nextMonth] = nextMonthDate.split("-");
-  await page.getByRole("button", { name: "사진으로 추가" }).click();
+  await chooseAssignmentPhoto(page);
   await page.getByRole("textbox", { name: "과제명" }).fill("다음 달 과제");
   await page.getByRole("textbox", { name: "과목" }).fill("자율");
   await page.getByRole("textbox", { name: "마감일" }).fill(nextMonthDate);
@@ -156,19 +278,15 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
     expect(png.readUInt32BE(20)).toBe(height);
     if (index === imagePresets.length - 1) break;
   }
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
-    Object.defineProperty(navigator, "share", {
-      configurable: true,
-      value: async (data: ShareData) => {
-        const file = data.files?.[0];
-        (window as Window & { __sharedCalendar?: { name?: string; type?: string } }).__sharedCalendar = { name: file?.name, type: file?.type };
-      },
-    });
-  });
+  await page.evaluate(() => Object.defineProperty(navigator, "share", {
+    configurable: true,
+    value: async () => { (window as Window & { __shareCalled?: boolean }).__shareCalled = true; },
+  }));
+  const directDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "배경화면으로 저장" }).click();
   await page.getByRole("button", { name: "스마트폰 비율 (세로)로 저장" }).click();
-  await expect.poll(() => page.evaluate(() => (window as Window & { __sharedCalendar?: { name?: string } }).__sharedCalendar?.name)).toContain("records-calendar-");
+  expect((await directDownload).suggestedFilename()).toContain("records-calendar-");
+  expect(await page.evaluate(() => (window as Window & { __shareCalled?: boolean }).__shareCalled ?? false)).toBe(false);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?screen=dashboard&theme=light");
   await expect(page.locator(".flow-stack")).toBeVisible();
@@ -214,8 +332,9 @@ test("photo analysis requires an explicit action and supports candidate review",
   await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?screen=dashboard&theme=light");
-  await page.getByRole("button", { name: "사진으로 추가" }).click();
-  await page.locator('input[type="file"]').setInputFiles({ name: "assignment.png", mimeType: "image/png", buffer: Buffer.from([137, 80, 78, 71]) });
+  await chooseAssignmentPhoto(page);
+  await expect(page.locator('input[type="file"]')).toHaveCount(2);
+  for (const input of await page.locator('input[type="file"]').all()) await expect(input).not.toHaveAttribute("capture", /.+/);
   expect(extractionRequests).toBe(0);
   await page.getByRole("button", { name: "사진 분석" }).click();
   await expect.poll(() => extractionRequests).toBe(1);
@@ -602,7 +721,7 @@ test("cached assignments remain usable offline and sync after reconnect", async 
   if (browserName !== "webkit") await page.reload();
   if (browserName !== "webkit") await expect(page.getByText("오프라인 · 변경사항 자동 저장")).toBeVisible();
 
-  await page.getByRole("button", { name: "사진으로 추가" }).click();
+  await page.getByRole("button", { name: "직접 과제 추가" }).click();
   await page.getByRole("textbox", { name: "과제명" }).fill("오프라인 과제");
   await page.getByRole("textbox", { name: "과목" }).fill("자율");
   await page.getByRole("button", { name: "과제 저장" }).click();
