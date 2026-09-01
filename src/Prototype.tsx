@@ -22,7 +22,6 @@ import {
   ChevronRightIcon,
   ClockIcon,
   Cross2Icon,
-  CrossCircledIcon,
   DashboardIcon,
   DownloadIcon,
   EnvelopeClosedIcon,
@@ -48,11 +47,13 @@ import {
 } from "./mobile";
 import {
   clearToken,
+  changePassword,
   completeAssignment,
   confirmEmailVerification,
   confirmPasswordReset,
   createAssignment,
   deleteAccount,
+  deleteAssignment,
   extractAssignment,
   hasToken,
   listAssignments,
@@ -70,6 +71,7 @@ import {
   updateNotificationPreferences,
   registerPushSubscription,
   updateAssignment,
+  updateProfile,
   AUTH_EXPIRED_EVENT,
   CONNECTION_STATUS_EVENT,
   type Assignment,
@@ -681,13 +683,13 @@ function Brand() {
   return <div className="brand">RECORDS<span>.</span></div>;
 }
 
-function TabletModal({ label, children }: { label: string; children: ReactNode }) {
+function TabletModal({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
   const reduceMotion = useReducedMotion();
   const duration = reduceMotion ? 0.01 : 0.2;
   return (
     <motion.div className="tablet-modal-overlay" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration }}>
       <motion.section
-        className="tablet-modal"
+        className={`tablet-modal ${className}`}
         role="dialog"
         aria-modal="true"
         aria-label={label}
@@ -699,6 +701,77 @@ function TabletModal({ label, children }: { label: string; children: ReactNode }
         {children}
       </motion.section>
     </motion.div>
+  );
+}
+
+function MyPageModal({ profile, onClose, onProfileUpdated, onPasswordChanged, onDeleteAccount }: {
+  profile: User;
+  onClose: () => void;
+  onProfileUpdated: (user: User) => void;
+  onPasswordChanged: () => void;
+  onDeleteAccount: () => void;
+}) {
+  const [name, setName] = useState(profile.name);
+  const [studentNumber, setStudentNumber] = useState(profile.studentNumber);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!name.trim() || !/^[0-9]{5}$/.test(studentNumber)) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const user = await updateProfile(name.trim(), studentNumber);
+      onProfileUpdated(user);
+      setMessage("개인 정보가 저장되었습니다.");
+    } catch (saveError) { setError(apiErrorMessage(saveError)); }
+    finally { setBusy(false); }
+  };
+
+  const savePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(""); setMessage("");
+    if (newPassword.length < 10) { setError("새 비밀번호는 10자 이상이어야 합니다."); return; }
+    if (newPassword !== confirmPassword) { setError("새 비밀번호가 서로 일치하지 않습니다."); return; }
+    setBusy(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      onPasswordChanged();
+    } catch (saveError) {
+      setError(saveError instanceof RecordsApiError && saveError.code === "INVALID_PASSWORD" ? "현재 비밀번호가 올바르지 않습니다." : apiErrorMessage(saveError));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <TabletModal label="마이페이지" className="mypage-modal">
+      <header><div><p className="section-label">계정 설정</p><h2>마이페이지</h2></div><button onClick={onClose} aria-label="닫기"><Cross2Icon /></button></header>
+      <div className="mypage-summary"><span>{profile.name.slice(0, 1)}</span><div><strong>{profile.name}</strong><small>{profile.email}</small></div></div>
+      {message ? <p className="mypage-success" role="status">{message}</p> : null}
+      {error ? <p className="auth-error" role="alert">{error}</p> : null}
+      <section className="mypage-section">
+        <div><h3>기본 정보</h3><p>이름과 학번을 수정할 수 있어요.</p></div>
+        <form onSubmit={saveProfile}>
+          <label className="form-field"><span>이름</span><input value={name} maxLength={50} onChange={(event) => setName(event.target.value)} autoComplete="name" /></label>
+          <label className="form-field"><span>학번</span><input value={studentNumber} inputMode="numeric" maxLength={5} onChange={(event) => setStudentNumber(event.target.value.replace(/\D/g, ""))} /></label>
+          <label className="form-field"><span>이메일</span><input value={profile.email} readOnly /></label>
+          <button className="save-button" disabled={busy || !name.trim() || !/^[0-9]{5}$/.test(studentNumber)}>정보 저장</button>
+        </form>
+      </section>
+      <section className="mypage-section">
+        <div><h3>비밀번호 변경</h3><p>변경 후에는 새 비밀번호로 다시 로그인해야 해요.</p></div>
+        <form onSubmit={savePassword}>
+          <label className="form-field"><span>현재 비밀번호</span><input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" /></label>
+          <label className="form-field"><span>새 비밀번호</span><input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" /></label>
+          <label className="form-field"><span>새 비밀번호 확인</span><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" /></label>
+          <button className="save-button" disabled={busy || !currentPassword || !newPassword || !confirmPassword}>비밀번호 변경</button>
+        </form>
+      </section>
+      <section className="mypage-danger"><div><h3>회원탈퇴</h3><p>계정과 모든 과제 및 알림이 영구적으로 삭제됩니다.</p></div><button type="button" onClick={onDeleteAccount}>회원탈퇴</button></section>
+    </TabletModal>
   );
 }
 
@@ -1157,9 +1230,11 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const { screenRef } = useScreenPortal();
   const [portalReady, setPortalReady] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
+  const [profile, setProfile] = useState<User | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [addChoiceOpen, setAddChoiceOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
+  const [myPageOpen, setMyPageOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [title, setTitle] = useState("");
@@ -1207,7 +1282,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     if (!hasToken()) return;
     const [from, to] = monthRange(calendar.year, calendar.month);
     let mounted = true;
-    me().catch((loadError) => { if (mounted) setError(apiErrorMessage(loadError)); });
+    me().then((user) => { if (mounted) setProfile(user); }).catch((loadError) => { if (mounted) setError(apiErrorMessage(loadError)); });
     listAssignments(from, to)
       .then((assignments) => { if (mounted) setTasks(assignments.map(taskFromAssignment)); })
       .catch((loadError) => { if (mounted) setError(apiErrorMessage(loadError)); });
@@ -1290,13 +1365,24 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     }
   };
 
+  const removeTask = async () => {
+    if (!editingTask || !window.confirm(`'${editingTask.title}' 과제를 삭제할까요?`)) return;
+    setBusy(true); setError("");
+    try {
+      await deleteAssignment(editingTask.id);
+      setTasks((current) => current.filter((task) => task.id !== editingTask.id));
+      setEditingTask(null);
+    } catch (deleteError) { setError(apiErrorMessage(deleteError)); }
+    finally { setBusy(false); }
+  };
+
   return (
     <>
       <MobileScroll className={`app-screen theme-${theme}`}>
         <main className="records" aria-label="과제 디데이 대시보드">
           <header className="topbar">
             <div><p className="eyebrow">과제 플래너</p><Brand /></div>
-            <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={() => setDeleteAccountOpen(true)} aria-label="회원탈퇴"><CrossCircledIcon /></button><button className="icon-button" onClick={onLogout} aria-label="로그아웃"><ExitIcon /></button></div>
+            <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={() => setMyPageOpen(true)} aria-label="마이페이지"><PersonIcon /></button><button className="icon-button" onClick={onLogout} aria-label="로그아웃"><ExitIcon /></button></div>
           </header>
           <OfflineBadge online={online} />
           <section className="deadline-card" aria-label="가장 가까운 마감">
@@ -1309,7 +1395,10 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
           <div className="bottom-spacer" />
         </main>
       </MobileScroll>
-      <AnimatePresence>{deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}</AnimatePresence>
+      <AnimatePresence>
+        {myPageOpen && profile ? <MyPageModal key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} /> : null}
+        {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
+      </AnimatePresence>
       {portalReady && screenRef.current ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
           <button className="photo-button" onClick={() => setAddChoiceOpen(true)}><PlusIcon /> 과제 추가</button>
@@ -1356,6 +1445,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
             </div>
             <label className="alarm-toggle"><input type="checkbox" checked={editingTask.notificationsEnabled} onChange={(event) => setEditingTask((task) => task ? { ...task, notificationsEnabled: event.target.checked } : task)} /><BellIcon />마감 알림 받기</label>
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
+            <button className="assignment-delete-button" type="button" onClick={() => void removeTask()} disabled={busy}>과제 삭제</button>
           </div>
         ) : null}
       </BottomSheet>
@@ -1479,6 +1569,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [addOpen, setAddOpen] = useState(false);
   const [addChoiceOpen, setAddChoiceOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
+  const [myPageOpen, setMyPageOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -1598,6 +1689,16 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
       setBusy(false);
     }
   };
+  const removeTask = async () => {
+    if (!editingTask || !window.confirm(`'${editingTask.title}' 과제를 삭제할까요?`)) return;
+    setBusy(true); setError("");
+    try {
+      await deleteAssignment(editingTask.id);
+      setTasks((current) => current.filter((task) => task.id !== editingTask.id));
+      setEditingTask(null);
+    } catch (deleteError) { setError(apiErrorMessage(deleteError)); }
+    finally { setBusy(false); }
+  };
   return (
     <main className="tablet-dashboard">
       <input ref={photoInputRef} hidden type="file" accept="image/*" onChange={(event) => {
@@ -1617,8 +1718,8 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
           <button className={view === "calendar" ? "active" : ""} onClick={() => setView("calendar")} aria-current={view === "calendar" ? "page" : undefined}><CalendarIcon />월간 달력</button>
         </nav>
         <div className="student-card"><span>{profile?.studentNumber || "-"}</span><strong>{profile?.name || "사용자"}</strong><small>{profile?.email || "-"}</small></div>
+        <button className="tablet-account" onClick={() => setMyPageOpen(true)}><PersonIcon />마이페이지</button>
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
-        <button className="tablet-delete-account" onClick={() => setDeleteAccountOpen(true)}><CrossCircledIcon />회원탈퇴</button>
       </aside>
       <section className="tablet-content">
         <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => setAddChoiceOpen(true)}><PlusIcon />과제 추가</button></div></header>
@@ -1638,6 +1739,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         )}
       </section>
       <AnimatePresence>
+        {myPageOpen && profile ? <MyPageModal key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} /> : null}
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
         {addChoiceOpen ? (
           <TabletModal key="add-choice" label="과제 추가 방법 선택">
@@ -1674,6 +1776,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
             </div>
             <label className="alarm-toggle"><input type="checkbox" checked={editingTask.notificationsEnabled} onChange={(event) => setEditingTask((task) => task ? { ...task, notificationsEnabled: event.target.checked } : task)} /><BellIcon />마감 알림 받기</label>
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
+            <button className="assignment-delete-button" type="button" onClick={() => void removeTask()} disabled={busy}>과제 삭제</button>
           </TabletModal>
         ) : null}
         {calendarSaveOpen ? (

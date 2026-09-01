@@ -44,7 +44,8 @@ type AssignmentPayload = { title: string; subject: string; dueAt: string; notifi
 type PendingOperation =
   | { key: string; type: "create"; assignmentId: string; payload: AssignmentPayload }
   | { key: string; type: "update"; assignmentId: string; payload: AssignmentPayload }
-  | { key: string; type: "completion"; assignmentId: string; payload: { completed: boolean } };
+  | { key: string; type: "completion"; assignmentId: string; payload: { completed: boolean } }
+  | { key: string; type: "delete"; assignmentId: string };
 
 export class RecordsApiError extends Error {
   code?: string;
@@ -170,7 +171,7 @@ function onlineNow() {
 
 function queueOperation(operation: PendingOperation) {
   const pending = readStored<PendingOperation[]>(PENDING_KEY, []);
-  const create = pending.find((candidate) => candidate.type === "create" && candidate.assignmentId === operation.assignmentId);
+  const create = pending.find((candidate): candidate is Extract<PendingOperation, { type: "create" }> => candidate.type === "create" && candidate.assignmentId === operation.assignmentId);
   if (create && operation.type === "update") {
     create.payload = operation.payload;
   } else {
@@ -358,6 +359,17 @@ export function deleteAccount(password: string) {
   return request<void>("/users/me", { method: "DELETE", body: JSON.stringify({ password }) });
 }
 
+export function updateProfile(name: string, studentNumber: string) {
+  return request<User>("/users/me", { method: "PATCH", body: JSON.stringify({ name, studentNumber }) }).then((user) => {
+    writeStored(USER_CACHE_KEY, user);
+    return user;
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return request<void>("/users/me/password", { method: "PATCH", body: JSON.stringify({ currentPassword, newPassword }) });
+}
+
 export async function listAssignments(from: string, to: string) {
   if (onlineNow()) {
     await syncPendingAssignments();
@@ -426,6 +438,27 @@ export async function updateAssignment(id: string, title: string, subject: strin
   upsertAssignment(assignment);
   queueOperation({ key: localId(), type: "update", assignmentId: id, payload });
   return assignment;
+}
+
+export async function deleteAssignment(id: string) {
+  if (onlineNow() && !id.startsWith("offline-")) {
+    try {
+      await request<void>(`/assignments/${id}`, { method: "DELETE" });
+      saveAssignments(cachedAssignments().filter((assignment) => assignment.id !== id));
+      writeStored(PENDING_KEY, readStored<PendingOperation[]>(PENDING_KEY, []).filter((operation) => operation.assignmentId !== id));
+      return;
+    } catch (error) {
+      if (!isNetworkError(error)) throw error;
+    }
+  }
+  saveAssignments(cachedAssignments().filter((assignment) => assignment.id !== id));
+  const pending = readStored<PendingOperation[]>(PENDING_KEY, []);
+  if (pending.some((operation) => operation.type === "create" && operation.assignmentId === id)) {
+    writeStored(PENDING_KEY, pending.filter((operation) => operation.assignmentId !== id));
+  } else {
+    writeStored(PENDING_KEY, [...pending.filter((operation) => operation.assignmentId !== id), { key: localId(), type: "delete", assignmentId: id }]);
+  }
+  window.dispatchEvent(new Event(OFFLINE_SYNC_EVENT));
 }
 
 export async function listNotifications(unreadOnly = false, limit = 20) {
@@ -551,9 +584,12 @@ export function syncPendingAssignments() {
         } else if (operation.type === "update") {
           assignment = await request<Assignment>(`/assignments/${operation.assignmentId}`, { method: "PATCH", body: JSON.stringify(operation.payload) });
           upsertAssignment(assignment);
-        } else {
+        } else if (operation.type === "completion") {
           assignment = await request<Assignment>(`/assignments/${operation.assignmentId}/completion`, { method: "PUT", body: JSON.stringify(operation.payload) });
           upsertAssignment(assignment);
+        } else {
+          await request<void>(`/assignments/${operation.assignmentId}`, { method: "DELETE" });
+          saveAssignments(cachedAssignments().filter((candidate) => candidate.id !== operation.assignmentId));
         }
         if (operation.type !== "create") {
           writeStored(PENDING_KEY, readStored<PendingOperation[]>(PENDING_KEY, []).filter((queued) => queued.key !== operation.key));

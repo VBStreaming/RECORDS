@@ -1518,6 +1518,7 @@ button {
 }
 
 .tablet-sidebar nav button,
+.tablet-account,
 .tablet-logout,
 .tablet-delete-account {
   display: flex;
@@ -1559,13 +1560,12 @@ button {
   font-size: 12px;
 }
 
-.tablet-logout {
+.tablet-account {
   margin-top: 8px;
 }
 
-.tablet-delete-account {
+.tablet-logout {
   margin-top: 0;
-  color: #e35353;
 }
 
 .tablet-content {
@@ -1822,6 +1822,100 @@ button {
   opacity: .45;
 }
 
+.mypage-modal {
+  width: min(560px, calc(100vw - 48px));
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
+}
+
+.mypage-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.mypage-summary > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 800;
+}
+
+.mypage-summary div,
+.mypage-section,
+.mypage-section form {
+  display: grid;
+  gap: 10px;
+}
+
+.mypage-summary small,
+.mypage-section p,
+.mypage-danger p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mypage-section {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.mypage-section h3,
+.mypage-danger h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.mypage-success {
+  margin: 0;
+  color: #35a46f;
+  font-size: 12px;
+}
+
+.mypage-danger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, #d94747 35%, transparent);
+  border-radius: 18px;
+}
+
+.mypage-danger button,
+.assignment-delete-button {
+  border: 0;
+  border-radius: 12px;
+  color: #d94747;
+  background: color-mix(in srgb, #d94747 12%, transparent);
+  font-weight: 800;
+}
+
+.mypage-danger button {
+  min-width: 82px;
+  height: 40px;
+}
+
+.assignment-delete-button {
+  width: 100%;
+  height: 46px;
+}
+
+.assignment-delete-button:disabled {
+  opacity: .45;
+}
+
 @media (max-width: 1100px) {
   .tablet-dashboard { grid-template-columns: 190px minmax(0, 1fr); }
   .tablet-content { padding: 30px 28px; }
@@ -2004,6 +2098,15 @@ button {
   .tablet-modal {
     width: calc(100vw - 32px);
     padding: 20px;
+  }
+
+  .mypage-modal {
+    max-height: calc(100dvh - 32px);
+  }
+
+  .mypage-danger {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .form-row {

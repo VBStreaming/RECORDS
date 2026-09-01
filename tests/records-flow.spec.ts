@@ -645,6 +645,8 @@ test("account deletion waits, verifies the password, and clears the session", as
   });
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto("/?screen=dashboard&theme=light");
+  await page.getByRole("button", { name: "마이페이지", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "마이페이지" })).toBeVisible();
   await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
 
   const dialog = page.getByRole("dialog", { name: "회원탈퇴 확인" });
@@ -661,6 +663,62 @@ test("account deletion waits, verifies the password, and clears the session", as
   expect(deleted).toBe(true);
   expect(await page.evaluate(() => localStorage.getItem("records-access-token"))).toBeNull();
   expect(await page.evaluate(() => localStorage.getItem("records-refresh-token"))).toBeNull();
+});
+
+test("my page updates profile and the edit sheet deletes an assignment", async ({ page }) => {
+  let profile = { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" };
+  let deleted = false;
+  const dueAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/users/me" && request.method() === "PATCH") {
+      profile = { ...profile, ...(request.postDataJSON() as { name: string; studentNumber: string }) };
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: profile }) });
+      return;
+    }
+    if (path === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: profile }) });
+      return;
+    }
+    if (path === "/assignments/task-1" && request.method() === "DELETE") {
+      deleted = true;
+      await route.fulfill({ status: 204 });
+      return;
+    }
+    if (path === "/assignments") {
+      const data = deleted ? [] : [{ id: "task-1", title: "삭제할 과제", subject: "수학", dueAt, notificationsEnabled: true, completed: false, completedAt: null, dayOffset: 0, deadlineLabel: "D-Day" }];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    if (path.startsWith("/notifications")) {
+      const data = path.endsWith("unread-count") ? { count: 0 } : path.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem("records-access-token", "test-access");
+    localStorage.setItem("records-refresh-token", "test-refresh");
+  });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?screen=dashboard&theme=light");
+
+  await page.getByRole("button", { name: "마이페이지", exact: true }).click();
+  const myPage = page.getByRole("dialog", { name: "마이페이지" });
+  await myPage.getByRole("textbox", { name: "이름" }).fill("수정학생");
+  await myPage.getByRole("textbox", { name: "학번" }).fill("20515");
+  await myPage.getByRole("button", { name: "정보 저장" }).click();
+  await expect(myPage.getByText("개인 정보가 저장되었습니다.")).toBeVisible();
+  await myPage.getByRole("button", { name: "닫기" }).click();
+  await expect(page.locator(".student-card")).toContainText("수정학생");
+
+  await page.getByRole("button", { name: "삭제할 과제 수정" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("dialog", { name: "과제 수정" }).getByRole("button", { name: "과제 삭제" }).click();
+  await expect(page.getByRole("heading", { name: "삭제할 과제" })).toHaveCount(0);
+  expect(deleted).toBe(true);
 });
 
 test("notification preferences are available from the dashboard", async ({ page }) => {
