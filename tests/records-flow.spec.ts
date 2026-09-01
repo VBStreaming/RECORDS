@@ -3,8 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function chooseAssignmentPhoto(page: Page) {
   await page.getByRole("button", { name: "과제 추가", exact: true }).click();
-  const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "사진으로 추가" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "사진 선택" }).click();
   await (await chooser).setFiles({
     name: "assignment.png",
     mimeType: "image/png",
@@ -363,8 +364,9 @@ test("photo analysis requires an explicit action and supports candidate review",
   await page.goto("/?screen=dashboard&theme=light");
   await expect(page.getByRole("button", { name: "과제 추가", exact: true })).toHaveCount(1);
   await chooseAssignmentPhoto(page);
-  await expect(page.locator('input[type="file"]')).toHaveCount(2);
-  for (const input of await page.locator('input[type="file"]').all()) await expect(input).not.toHaveAttribute("capture", /.+/);
+  await expect(page.locator('input[type="file"]')).toHaveCount(3);
+  await expect(page.locator('input[type="file"][capture="environment"]')).toHaveCount(1);
+  await expect(page.locator('input[type="file"]:not([capture])')).toHaveCount(2);
   expect(extractionRequests).toBe(0);
   await page.getByRole("button", { name: "사진 분석" }).click();
   await expect.poll(() => extractionRequests).toBe(1);
@@ -387,6 +389,10 @@ test("photo analysis requires an explicit action and supports candidate review",
   await page.getByRole("button", { name: "과제 추가", exact: true }).click();
   await expect(page.getByRole("button", { name: "사진으로 추가" })).toBeVisible();
   await expect(page.getByRole("button", { name: "직접 입력" })).toBeVisible();
+  await page.getByRole("button", { name: "사진으로 추가" }).click();
+  await expect(page.getByRole("button", { name: "사진 선택" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "카메라 촬영" })).toBeVisible();
+  await expect(page.locator('input[type="file"][capture="environment"]')).toHaveCount(1);
 });
 
 test("expired access token redirects to login on tablet and mobile", async ({ page }) => {
