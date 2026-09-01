@@ -22,6 +22,7 @@ import {
   ChevronRightIcon,
   ClockIcon,
   Cross2Icon,
+  CrossCircledIcon,
   DashboardIcon,
   DownloadIcon,
   EnvelopeClosedIcon,
@@ -51,6 +52,7 @@ import {
   confirmEmailVerification,
   confirmPasswordReset,
   createAssignment,
+  deleteAccount,
   extractAssignment,
   hasToken,
   listAssignments,
@@ -699,6 +701,48 @@ function TabletModal({ label, children }: { label: string; children: ReactNode }
   );
 }
 
+function DeleteAccountModal({ onClose, onDeleted }: { onClose: () => void; onDeleted: () => void }) {
+  const [seconds, setSeconds] = useState(5);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (seconds === 0) return;
+    const timer = window.setTimeout(() => setSeconds((current) => current - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [seconds]);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (seconds > 0 || !password) return;
+    setBusy(true);
+    setError("");
+    try {
+      await deleteAccount(password);
+      onDeleted();
+    } catch (deleteError) {
+      setError(deleteError instanceof RecordsApiError && deleteError.code === "INVALID_PASSWORD"
+        ? "비밀번호가 올바르지 않습니다."
+        : apiErrorMessage(deleteError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <TabletModal label="회원탈퇴 확인">
+      <header><div><p className="section-label">계정 삭제</p><h2>정말 지우시겠습니까?</h2></div><button onClick={onClose} aria-label="닫기"><Cross2Icon /></button></header>
+      <p className="delete-account-warning">과제, 알림, 로그인 정보가 모두 삭제되며 복구할 수 없습니다.</p>
+      <form className="delete-account-form" onSubmit={submit}>
+        <label className="form-field"><span>현재 비밀번호</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="비밀번호를 다시 입력하세요" /></label>
+        {error ? <p className="auth-error" role="alert">{error}</p> : null}
+        <button className="delete-account-confirm" type="submit" disabled={busy || seconds > 0 || !password}>{busy ? "삭제 중..." : seconds > 0 ? `${seconds}초 후 회원탈퇴` : "회원탈퇴"}</button>
+      </form>
+    </TabletModal>
+  );
+}
+
 function AuthField({ icon, label, ...props }: InputHTMLAttributes<HTMLInputElement> & { icon: ReactNode; label: string }) {
   return (
     <label className="auth-field">
@@ -1102,6 +1146,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
@@ -1237,7 +1282,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         <main className="records" aria-label="과제 디데이 대시보드">
           <header className="topbar">
             <div><p className="eyebrow">과제 플래너</p><Brand /></div>
-            <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={onLogout} aria-label="로그아웃"><ExitIcon /></button></div>
+            <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={() => setDeleteAccountOpen(true)} aria-label="회원탈퇴"><CrossCircledIcon /></button><button className="icon-button" onClick={onLogout} aria-label="로그아웃"><ExitIcon /></button></div>
           </header>
           <OfflineBadge online={online} />
           <section className="deadline-card" aria-label="가장 가까운 마감">
@@ -1250,6 +1295,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
           <div className="bottom-spacer" />
         </main>
       </MobileScroll>
+      <AnimatePresence>{deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}</AnimatePresence>
       {portalReady && screenRef.current ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
           <button className="photo-button" onClick={() => photoInputRef.current?.click()}><CameraIcon /> 사진으로 추가</button>
@@ -1416,6 +1462,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [profile, setProfile] = useState<User | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [title, setTitle] = useState("");
@@ -1554,6 +1601,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         </nav>
         <div className="student-card"><span>{profile?.studentNumber || "-"}</span><strong>{profile?.name || "사용자"}</strong><small>{profile?.email || "-"}</small></div>
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
+        <button className="tablet-delete-account" onClick={() => setDeleteAccountOpen(true)}><CrossCircledIcon />회원탈퇴</button>
       </aside>
       <section className="tablet-content">
         <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => photoInputRef.current?.click()}><CameraIcon />사진으로 추가</button><button className="icon-button" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }} aria-label="직접 과제 추가"><PlusIcon /></button></div></header>
@@ -1573,6 +1621,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         )}
       </section>
       <AnimatePresence>
+        {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
         {addOpen ? (
           <TabletModal key="add-assignment" label="새 과제 추가">
             <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>

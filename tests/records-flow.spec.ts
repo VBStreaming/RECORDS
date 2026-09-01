@@ -599,6 +599,60 @@ test("selected theme survives reload on tablet and mobile", async ({ page }) => 
   await expect(page.locator(".app-screen")).toHaveClass(/theme-light/);
 });
 
+test("account deletion waits, verifies the password, and clears the session", async ({ page }) => {
+  let deleted = false;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/users/me" && request.method() === "DELETE") {
+      const password = (request.postDataJSON() as { password: string }).password;
+      if (password !== "records-password") {
+        await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ success: false, error: { code: "INVALID_PASSWORD", message: "비밀번호가 올바르지 않습니다." } }) });
+        return;
+      }
+      deleted = true;
+      await route.fulfill({ status: 204 });
+      return;
+    }
+    if (path === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (path === "/assignments") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [] }) });
+      return;
+    }
+    if (path.startsWith("/notifications")) {
+      const data = path.endsWith("unread-count") ? { count: 0 } : path.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem("records-access-token", "test-access");
+    localStorage.setItem("records-refresh-token", "test-refresh");
+  });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?screen=dashboard&theme=light");
+  await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
+
+  const dialog = page.getByRole("dialog", { name: "회원탈퇴 확인" });
+  await expect(dialog.getByRole("heading", { name: "정말 지우시겠습니까?" })).toBeVisible();
+  await dialog.getByRole("textbox", { name: "현재 비밀번호" }).fill("wrong-password");
+  await expect(dialog.getByRole("button", { name: /초 후 회원탈퇴/ })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "회원탈퇴", exact: true })).toBeEnabled({ timeout: 7_000 });
+  await dialog.getByRole("button", { name: "회원탈퇴", exact: true }).click();
+  await expect(dialog.getByText("비밀번호가 올바르지 않습니다.")).toBeVisible();
+
+  await dialog.getByRole("textbox", { name: "현재 비밀번호" }).fill("records-password");
+  await dialog.getByRole("button", { name: "회원탈퇴", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "다시 만나서 반가워요." })).toBeVisible();
+  expect(deleted).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem("records-access-token"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("records-refresh-token"))).toBeNull();
+});
+
 test("notification preferences are available from the dashboard", async ({ page }) => {
   const email = `records-notification-${Date.now()}@example.com`;
   await page.setViewportSize({ width: 1024, height: 768 });

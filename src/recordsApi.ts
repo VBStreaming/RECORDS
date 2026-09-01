@@ -354,6 +354,10 @@ export function me() {
   });
 }
 
+export function deleteAccount(password: string) {
+  return request<void>("/users/me", { method: "DELETE", body: JSON.stringify({ password }) });
+}
+
 export async function listAssignments(from: string, to: string) {
   if (onlineNow()) {
     await syncPendingAssignments();
