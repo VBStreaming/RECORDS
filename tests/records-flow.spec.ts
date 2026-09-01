@@ -123,6 +123,30 @@ test("existing unverified signup resumes on the verification page", async ({ pag
   await expect(page.getByRole("heading", { name: "인증 코드를 입력해 주세요." })).toBeVisible();
 });
 
+test("duplicate signup keeps the duplicate email error when credentials do not match", async ({ page }) => {
+  await page.route("**/auth/signup", (route) => route.fulfill({
+    status: 409,
+    contentType: "application/json",
+    body: JSON.stringify({ success: false, error: { code: "EMAIL_ALREADY_EXISTS", message: "이미 사용 중인 이메일입니다." } }),
+  }));
+  await page.route("**/auth/login", (route) => route.fulfill({
+    status: 401,
+    contentType: "application/json",
+    body: JSON.stringify({ success: false, error: { code: "INVALID_CREDENTIALS", message: "이메일 또는 비밀번호가 올바르지 않습니다." } }),
+  }));
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?screen=signup&theme=light");
+  await page.getByRole("textbox", { name: "학번" }).fill("12313");
+  await page.getByRole("textbox", { name: "이름" }).fill("11");
+  await page.getByRole("textbox", { name: "이메일" }).fill("hsm20090529@dgsw.hs.kr");
+  await page.getByRole("textbox", { name: "비밀번호" }).fill("wrong-password");
+  await page.getByRole("button", { name: "회원가입 완료" }).click();
+
+  await expect(page.getByText("이미 사용 중인 이메일입니다.")).toBeVisible();
+  await expect(page).toHaveURL(/screen=signup/);
+});
+
 test("responsive signup, calendar, task edit and dashboard flows work", async ({ page }) => {
   const email = `records-flow-${Date.now()}@example.com`;
   await page.setViewportSize({ width: 1024, height: 1366 });

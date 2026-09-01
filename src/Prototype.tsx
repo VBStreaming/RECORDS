@@ -160,8 +160,13 @@ async function signupOrResume(name: string, email: string, studentId: string, pa
     return false;
   } catch (error) {
     if (!(error instanceof RecordsApiError) || error.code !== "EMAIL_ALREADY_EXISTS") throw error;
-    await login(email, password);
-    return true;
+    try {
+      await login(email, password);
+      return true;
+    } catch (loginError) {
+      if (loginError instanceof RecordsApiError && loginError.code === "EMAIL_NOT_VERIFIED") throw loginError;
+      throw error;
+    }
   }
 }
 
