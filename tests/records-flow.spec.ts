@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 async function chooseAssignmentPhoto(page: Page) {
+  await page.getByRole("button", { name: "과제 추가", exact: true }).click();
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "사진으로 추가" }).click();
   await (await chooser).setFiles({
@@ -360,6 +361,7 @@ test("photo analysis requires an explicit action and supports candidate review",
   await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?screen=dashboard&theme=light");
+  await expect(page.getByRole("button", { name: "과제 추가", exact: true })).toHaveCount(1);
   await chooseAssignmentPhoto(page);
   await expect(page.locator('input[type="file"]')).toHaveCount(2);
   for (const input of await page.locator('input[type="file"]').all()) await expect(input).not.toHaveAttribute("capture", /.+/);
@@ -377,6 +379,14 @@ test("photo analysis requires an explicit action and supports candidate review",
   await page.setViewportSize({ width: 844, height: 390 });
   await expect(page.locator(".flow-stack")).toBeVisible();
   await expect(page.locator(".tablet-dashboard")).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?screen=dashboard&theme=light");
+  await expect(page.locator(".tablet-dashboard")).toBeVisible();
+  await expect(page.getByRole("button", { name: "과제 추가", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "과제 추가", exact: true }).click();
+  await expect(page.getByRole("button", { name: "사진으로 추가" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "직접 입력" })).toBeVisible();
 });
 
 test("expired access token redirects to login on tablet and mobile", async ({ page }) => {
@@ -803,7 +813,8 @@ test("cached assignments remain usable offline and sync after reconnect", async 
   if (browserName !== "webkit") await page.reload();
   if (browserName !== "webkit") await expect(page.getByText("오프라인 · 변경사항 자동 저장")).toBeVisible();
 
-  await page.getByRole("button", { name: "직접 과제 추가" }).click();
+  await page.getByRole("button", { name: "과제 추가", exact: true }).click();
+  await page.getByRole("button", { name: "직접 입력" }).click();
   await page.getByRole("textbox", { name: "과제명" }).fill("오프라인 과제");
   await page.getByRole("textbox", { name: "과목" }).fill("자율");
   await page.getByRole("button", { name: "과제 저장" }).click();

@@ -390,7 +390,7 @@ function CalendarSaveOptions({ onSelect, busy }: { onSelect: (preset: CalendarIm
   return (
     <div className="calendar-save-options">
       <p>월간 그리드와 날짜별 과목·시간을 배경화면으로 저장하세요.</p>
-      <div className="calendar-save-grid">
+      <div className="calendar-save-grid add-method-grid">
         {calendarImagePresets.map((preset) => (
           <button key={preset.id} className="calendar-save-option" onClick={() => onSelect(preset)} disabled={busy} aria-label={`${preset.label}로 저장`}>
             <strong>{preset.label}</strong>
@@ -462,6 +462,7 @@ function OfflineBadge({ online }: { online: boolean }) {
 }
 
 function apiErrorMessage(error: unknown) {
+  if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) return "요청 시간이 초과되었습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.";
   return error instanceof RecordsApiError || error instanceof Error ? error.message : "요청에 실패했습니다.";
 }
 
@@ -1099,6 +1100,18 @@ function PhotoPicker({ file, onSelect }: { file: File | null; onSelect: (file: F
   );
 }
 
+function AddAssignmentOptions({ onPhoto, onManual }: { onPhoto: () => void; onManual: () => void }) {
+  return (
+    <div className="calendar-save-options">
+      <p>추가 방법을 선택하세요.</p>
+      <div className="calendar-save-grid">
+        <button className="calendar-save-option" onClick={onPhoto}><CameraIcon /><strong>사진으로 추가</strong><small>사진에서 과제 정보를 인식해요.</small></button>
+        <button className="calendar-save-option" onClick={onManual}><PlusIcon /><strong>직접 입력</strong><small>과제 정보를 직접 입력해요.</small></button>
+      </div>
+    </div>
+  );
+}
+
 function AnalysisReview({ candidates, selected, warnings, onSelect }: { candidates: Candidate[]; selected: number; warnings: string[]; onSelect: (candidate: Candidate, index: number) => void }) {
   if (!candidates.length && !warnings.length) return null;
   return (
@@ -1145,6 +1158,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [portalReady, setPortalReady] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [addChoiceOpen, setAddChoiceOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
@@ -1298,8 +1312,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       <AnimatePresence>{deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}</AnimatePresence>
       {portalReady && screenRef.current ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
-          <button className="photo-button" onClick={() => photoInputRef.current?.click()}><CameraIcon /> 사진으로 추가</button>
-          <button className="plus-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }} aria-label="직접 과제 추가"><PlusIcon /></button>
+          <button className="photo-button" onClick={() => setAddChoiceOpen(true)}><PlusIcon /> 과제 추가</button>
         </nav>, screenRef.current,
       ) : null}
       <input ref={photoInputRef} hidden type="file" accept="image/*" onChange={(event) => {
@@ -1312,6 +1325,9 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         setDueDate(calendar.selectedDate);
         setSheetOpen(true);
       }} />
+      <BottomSheet open={addChoiceOpen} onOpenChange={setAddChoiceOpen} title="과제 추가" description="사진으로 인식하거나 직접 입력할 수 있어요." snap={0.38}>
+        <AddAssignmentOptions onPhoto={() => { setAddChoiceOpen(false); photoInputRef.current?.click(); }} onManual={() => { setAddChoiceOpen(false); setDueDate(calendar.selectedDate); setSheetOpen(true); }} />
+      </BottomSheet>
       <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen} title="새 과제 추가" description="사진 한 장과 필수 정보만 빠르게 기록해요." snap={0.86}>
         <div className="add-form">
           <PhotoPicker file={file} onSelect={(selectedFile) => { setFile(selectedFile); setCandidates([]); setAnalysisWarnings([]); }} />
@@ -1461,6 +1477,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [profile, setProfile] = useState<User | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [addChoiceOpen, setAddChoiceOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
@@ -1604,7 +1621,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <button className="tablet-delete-account" onClick={() => setDeleteAccountOpen(true)}><CrossCircledIcon />회원탈퇴</button>
       </aside>
       <section className="tablet-content">
-        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => photoInputRef.current?.click()}><CameraIcon />사진으로 추가</button><button className="icon-button" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }} aria-label="직접 과제 추가"><PlusIcon /></button></div></header>
+        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="tablet-photo" onClick={() => setAddChoiceOpen(true)}><PlusIcon />과제 추가</button></div></header>
         {view === "dashboard" ? (
           <div className="tablet-grid">
             <div className="tablet-left">
@@ -1622,6 +1639,12 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
       </section>
       <AnimatePresence>
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
+        {addChoiceOpen ? (
+          <TabletModal key="add-choice" label="과제 추가 방법 선택">
+            <header><div><p className="section-label">과제 추가</p><h2>추가 방법을 선택하세요.</h2></div><button onClick={() => setAddChoiceOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
+            <AddAssignmentOptions onPhoto={() => { setAddChoiceOpen(false); photoInputRef.current?.click(); }} onManual={() => { setAddChoiceOpen(false); setDueDate(calendar.selectedDate); setAddOpen(true); }} />
+          </TabletModal>
+        ) : null}
         {addOpen ? (
           <TabletModal key="add-assignment" label="새 과제 추가">
             <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>

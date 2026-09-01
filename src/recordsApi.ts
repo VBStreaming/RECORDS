@@ -525,7 +525,7 @@ export function extractAssignment(image: File) {
   if (!onlineNow()) return Promise.reject(new RecordsApiError("오프라인에서는 사진 분석을 사용할 수 없습니다. 직접 과제를 입력해 주세요."));
   const body = new FormData();
   body.append("image", image);
-  return request<Extraction>("/assignment-extractions", { method: "POST", body });
+  return request<Extraction>("/assignment-extractions", { method: "POST", body, signal: AbortSignal.timeout(60000) });
 }
 
 let syncInFlight: Promise<void> | null = null;

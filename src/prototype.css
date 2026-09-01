@@ -976,6 +976,10 @@ button {
   gap: 8px;
 }
 
+.add-method-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .calendar-save-option {
   display: grid;
   min-height: 78px;
