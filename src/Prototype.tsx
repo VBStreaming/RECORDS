@@ -1151,45 +1151,10 @@ function TaskList({ tasks, selectedDate, onToggle, onEdit }: { tasks: Task[]; se
   );
 }
 
-function PhotoPicker({ file, onSelect, onRequestSelect }: { file: File | null; onSelect: (file: File) => void; onRequestSelect?: () => void }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+function PhotoPicker({ file, onRequestSelect }: { file: File | null; onRequestSelect: () => void }) {
   return (
     <div className="photo-field">
-      <button type="button" className="photo-picker-trigger" onClick={() => onRequestSelect ? onRequestSelect() : inputRef.current?.click()}>
-        <ImageIcon />
-        <span>{file?.name || "칠판 또는 유인물 사진 선택"}</span>
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        onChange={(event) => {
-          const selectedFile = event.currentTarget.files?.[0];
-          event.currentTarget.value = "";
-          if (selectedFile) onSelect(selectedFile);
-        }}
-      />
-    </div>
-  );
-}
-
-function AddAssignmentOptions({ onPhoto, onManual }: { onPhoto: () => void; onManual: () => void }) {
-  return (
-    <div className="calendar-save-options">
-      <p>추가 방법을 선택하세요.</p>
-      <div className="calendar-save-grid">
-        <button className="calendar-save-option" onClick={onPhoto}><CameraIcon /><strong>사진으로 추가</strong><small>사진에서 과제 정보를 인식해요.</small></button>
-        <button className="calendar-save-option" onClick={onManual}><PlusIcon /><strong>직접 입력</strong><small>과제 정보를 직접 입력해요.</small></button>
-      </div>
-    </div>
-  );
-}
-
-function ImageSourceOptions({ onGallery, onCamera }: { onGallery: () => void; onCamera: () => void }) {
-  return (
-    <div className="calendar-save-grid add-method-grid image-source-grid">
-      <button className="calendar-save-option" type="button" onClick={onGallery}><ImageIcon /><strong>사진 선택</strong><small>갤러리에서 사진을 선택해요.</small></button>
-      <button className="calendar-save-option" type="button" onClick={onCamera}><CameraIcon /><strong>카메라 촬영</strong><small>카메라로 바로 촬영해요.</small></button>
+      <button type="button" className="photo-picker-trigger" onClick={onRequestSelect}><ImageIcon /><span>{file?.name || "칠판 또는 유인물 사진 선택"}</span></button>
     </div>
   );
 }
@@ -1241,8 +1206,6 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [profile, setProfile] = useState<User | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [addChoiceOpen, setAddChoiceOpen] = useState(false);
-  const [imageSourceOpen, setImageSourceOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
   const [myPageOpen, setMyPageOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
@@ -1260,7 +1223,6 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const calendar = useCalendar(tasks);
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
@@ -1410,9 +1372,9 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         {myPageOpen && profile ? <MyPageModal key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} /> : null}
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
       </AnimatePresence>
-      {portalReady && screenRef.current && !addChoiceOpen && !imageSourceOpen && !sheetOpen && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? createPortal(
+      {portalReady && screenRef.current && !sheetOpen && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
-          <button className="photo-button" onClick={() => setAddChoiceOpen(true)}><PlusIcon /> 과제 추가</button>
+          <button className="photo-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }}><PlusIcon /> 과제 추가</button>
         </nav>, screenRef.current,
       ) : null}
       <input ref={photoInputRef} hidden type="file" accept="image/*" onChange={(event) => {
@@ -1425,25 +1387,9 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         setDueDate(calendar.selectedDate);
         setSheetOpen(true);
       }} />
-      <input ref={cameraInputRef} hidden type="file" accept="image/*" capture="environment" onChange={(event) => {
-        const selectedFile = event.currentTarget.files?.[0];
-        event.currentTarget.value = "";
-        if (!selectedFile) return;
-        setFile(selectedFile);
-        setCandidates([]);
-        setAnalysisWarnings([]);
-        setDueDate(calendar.selectedDate);
-        setSheetOpen(true);
-      }} />
-      <BottomSheet open={addChoiceOpen} onOpenChange={setAddChoiceOpen} title="과제 추가" description="사진으로 인식하거나 직접 입력할 수 있어요." snap={0.38}>
-        <AddAssignmentOptions onPhoto={() => { setAddChoiceOpen(false); setImageSourceOpen(true); }} onManual={() => { setAddChoiceOpen(false); setDueDate(calendar.selectedDate); setSheetOpen(true); }} />
-      </BottomSheet>
-      <BottomSheet open={imageSourceOpen} onOpenChange={setImageSourceOpen} title="사진으로 추가" description="사진을 선택하거나 카메라로 촬영하세요." snap={0.42}>
-        <ImageSourceOptions onGallery={() => { setImageSourceOpen(false); photoInputRef.current?.click(); }} onCamera={() => { setImageSourceOpen(false); cameraInputRef.current?.click(); }} />
-      </BottomSheet>
       <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen} title="새 과제 추가" description="사진 한 장과 필수 정보만 빠르게 기록해요." snap={0.86}>
         <div className="add-form">
-          <PhotoPicker file={file} onSelect={(selectedFile) => { setFile(selectedFile); setCandidates([]); setAnalysisWarnings([]); }} onRequestSelect={() => { setSheetOpen(false); setImageSourceOpen(true); }} />
+          <PhotoPicker file={file} onRequestSelect={() => photoInputRef.current?.click()} />
           {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
           <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
@@ -1591,8 +1537,6 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [profile, setProfile] = useState<User | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [addChoiceOpen, setAddChoiceOpen] = useState(false);
-  const [imageSourceOpen, setImageSourceOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
   const [myPageOpen, setMyPageOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
@@ -1610,7 +1554,6 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const calendar = useCalendar(tasks);
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
@@ -1737,16 +1680,6 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         setDueDate(calendar.selectedDate);
         setAddOpen(true);
       }} />
-      <input ref={cameraInputRef} hidden type="file" accept="image/*" capture="environment" onChange={(event) => {
-        const selectedFile = event.currentTarget.files?.[0];
-        event.currentTarget.value = "";
-        if (!selectedFile) return;
-        setFile(selectedFile);
-        setCandidates([]);
-        setAnalysisWarnings([]);
-        setDueDate(calendar.selectedDate);
-        setAddOpen(true);
-      }} />
       <aside className="tablet-sidebar">
         <Brand />
         <nav>
@@ -1758,7 +1691,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
       </aside>
       <section className="tablet-content">
-        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button>{!addChoiceOpen && !imageSourceOpen && !addOpen && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? <button className="tablet-photo" onClick={() => setAddChoiceOpen(true)}><PlusIcon />과제 추가</button> : null}</div></header>
+        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button>{!addOpen && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? <button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><PlusIcon />과제 추가</button> : null}</div></header>
         {view === "dashboard" ? (
           <div className="tablet-grid">
             <div className="tablet-left">
@@ -1777,22 +1710,10 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
       <AnimatePresence>
         {myPageOpen && profile ? <MyPageModal key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} /> : null}
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
-        {addChoiceOpen ? (
-          <TabletModal key="add-choice" label="과제 추가 방법 선택">
-            <header><div><p className="section-label">과제 추가</p><h2>추가 방법을 선택하세요.</h2></div><button onClick={() => setAddChoiceOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
-            <AddAssignmentOptions onPhoto={() => { setAddChoiceOpen(false); setImageSourceOpen(true); }} onManual={() => { setAddChoiceOpen(false); setDueDate(calendar.selectedDate); setAddOpen(true); }} />
-          </TabletModal>
-        ) : null}
-        {imageSourceOpen ? (
-          <TabletModal key="image-source" label="사진으로 추가">
-            <header><div><p className="section-label">사진 추가</p><h2>사진을 선택하세요.</h2></div><button onClick={() => setImageSourceOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
-            <ImageSourceOptions onGallery={() => { setImageSourceOpen(false); photoInputRef.current?.click(); }} onCamera={() => { setImageSourceOpen(false); cameraInputRef.current?.click(); }} />
-          </TabletModal>
-        ) : null}
         {addOpen ? (
           <TabletModal key="add-assignment" label="새 과제 추가">
             <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
-            <PhotoPicker file={file} onSelect={(selectedFile) => { setFile(selectedFile); setCandidates([]); setAnalysisWarnings([]); }} onRequestSelect={() => { setAddOpen(false); setImageSourceOpen(true); }} />
+            <PhotoPicker file={file} onRequestSelect={() => photoInputRef.current?.click()} />
             {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
             <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
