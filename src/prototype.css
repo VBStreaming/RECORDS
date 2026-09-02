@@ -1885,6 +1885,12 @@ button {
   gap: 14px;
 }
 
+.mypage-large-sheet {
+  top: max(12px, env(safe-area-inset-top, 0px));
+  height: auto;
+  max-height: none !important;
+}
+
 .mypage-modal {
   max-height: min(88vh, 820px);
   overflow-y: auto;

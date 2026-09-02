@@ -732,6 +732,9 @@ test("my page updates profile and the edit sheet deletes an assignment", async (
   await expect.poll(() => page.evaluate(() => document.activeElement instanceof HTMLInputElement)).toBe(false);
   const sheetHeight = await page.locator('[data-testid="bottom-sheet"]').evaluate((sheet) => sheet.getBoundingClientRect().height);
   expect(sheetHeight).toBeGreaterThan(844 * 0.9);
+  await page.locator('[data-testid="sheet-overlay"]').click({ position: { x: 10, y: 10 } });
+  await expect(page.locator('[data-testid="bottom-sheet"]')).toHaveCount(1);
+  await expect(page.locator('[data-testid="bottom-sheet"]')).toHaveCount(0, { timeout: 1_000 });
 });
 
 test("notification preferences are available from the dashboard", async ({ page }) => {

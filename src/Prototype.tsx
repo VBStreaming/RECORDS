@@ -796,17 +796,33 @@ function MyPageSheet({ profile, onClose, onProfileUpdated, onPasswordChanged, on
   onPasswordChanged: () => void;
   onDeleteAccount: () => void;
 }) {
-  useBottomSheetOverscroll(true);
+  const [open, setOpen] = useState(true);
+  const closeTimer = useRef<number | null>(null);
+  useBottomSheetOverscroll(open);
+
+  const close = () => {
+    if (!open || closeTimer.current !== null) return;
+    setOpen(false);
+    closeTimer.current = window.setTimeout(onClose, 420);
+  };
+
   useEffect(() => {
+    let sheet: HTMLElement | null = null;
     const frame = window.requestAnimationFrame(() => {
+      sheet = document.querySelector<HTMLElement>('[data-testid="bottom-sheet"]');
+      sheet?.classList.add("mypage-large-sheet");
       const activeElement = document.activeElement;
       if (activeElement instanceof HTMLInputElement) activeElement.blur();
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+      sheet?.classList.remove("mypage-large-sheet");
+    };
   }, []);
 
   return (
-    <BottomSheet open onOpenChange={(open) => { if (!open) onClose(); }} title="마이페이지" description="개인 정보와 계정을 관리하세요." snap={0.96}>
+    <BottomSheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) close(); }} title="마이페이지" description="개인 정보와 계정을 관리하세요." snap={1}>
       <div className="mypage-sheet-content">
         <MyPageContent profile={profile} onProfileUpdated={onProfileUpdated} onPasswordChanged={onPasswordChanged} onDeleteAccount={onDeleteAccount} />
       </div>
