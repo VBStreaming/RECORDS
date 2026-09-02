@@ -796,8 +796,50 @@ function MyPageSheet({ profile, onClose, onProfileUpdated, onPasswordChanged, on
   onPasswordChanged: () => void;
   onDeleteAccount: () => void;
 }) {
+  useEffect(() => {
+    const sheet = document.querySelector<HTMLElement>('[data-testid="bottom-sheet"]');
+    const content = sheet?.querySelector<HTMLElement>('.sheet-content');
+    if (!sheet || !content) return;
+
+    sheet.classList.add("mypage-expandable-sheet");
+    let startY: number | null = null;
+    const expand = () => {
+      const containerHeight = sheet.parentElement?.getBoundingClientRect().height ?? window.innerHeight;
+      const height = Math.max(260, containerHeight - 8);
+      sheet.classList.add("mypage-sheet-expanded");
+      sheet.style.height = `${height}px`;
+      sheet.style.maxHeight = `${height}px`;
+    };
+    const onTouchStart = (event: TouchEvent) => { startY = event.touches[0]?.clientY ?? null; };
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY;
+      if (startY !== null && currentY !== undefined && startY - currentY > 12 && content.scrollTop <= 0 && !sheet.classList.contains("mypage-sheet-expanded")) {
+        event.preventDefault();
+        expand();
+        startY = null;
+      }
+    };
+    const onTouchEnd = () => { startY = null; };
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0 && content.scrollTop <= 0 && !sheet.classList.contains("mypage-sheet-expanded")) {
+        event.preventDefault();
+        expand();
+      }
+    };
+    content.addEventListener("touchstart", onTouchStart, { passive: true });
+    content.addEventListener("touchmove", onTouchMove, { passive: false });
+    content.addEventListener("touchend", onTouchEnd, { passive: true });
+    content.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      content.removeEventListener("touchstart", onTouchStart);
+      content.removeEventListener("touchmove", onTouchMove);
+      content.removeEventListener("touchend", onTouchEnd);
+      content.removeEventListener("wheel", onWheel);
+    };
+  }, []);
+
   return (
-    <BottomSheet open onOpenChange={(open) => { if (!open) onClose(); }} title="마이페이지" description="개인 정보와 계정을 관리하세요." snap={0.9}>
+    <BottomSheet open onOpenChange={(open) => { if (!open) onClose(); }} title="마이페이지" description="개인 정보와 계정을 관리하세요." snap={0.68}>
       <div className="mypage-sheet-content">
         <MyPageContent profile={profile} onProfileUpdated={onProfileUpdated} onPasswordChanged={onPasswordChanged} onDeleteAccount={onDeleteAccount} />
       </div>
