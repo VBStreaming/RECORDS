@@ -2276,4 +2276,19 @@ button {
   .form-field input {
     min-width: 0;
   }
+
+  .candidate-list {
+    display: grid;
+    overflow: visible;
+  }
+
+  .candidate-list button {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    padding: 9px 11px;
+    text-align: left;
+    line-height: 1.4;
+  }
 }
