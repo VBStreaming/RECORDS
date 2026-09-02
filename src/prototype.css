@@ -2008,6 +2008,11 @@ button {
   font-size: 12px;
 }
 
+.logout-confirm-overlay {
+  z-index: 100 !important;
+  pointer-events: auto;
+}
+
 .logout-confirm-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

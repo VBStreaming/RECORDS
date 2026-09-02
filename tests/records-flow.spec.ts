@@ -738,6 +738,10 @@ test("my page updates profile and the edit sheet deletes an assignment", async (
   await expect.poll(() => page.evaluate(() => document.activeElement instanceof HTMLInputElement)).toBe(false);
   const sheetHeight = await page.locator('[data-testid="bottom-sheet"]').evaluate((sheet) => sheet.getBoundingClientRect().height);
   expect(sheetHeight).toBeGreaterThan(844 * 0.9);
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  const mobileLogoutDialog = page.getByRole("dialog", { name: "로그아웃 확인" });
+  await expect(mobileLogoutDialog).toBeVisible();
+  await mobileLogoutDialog.getByRole("button", { name: "취소", exact: true }).click();
   await page.locator('[data-testid="sheet-overlay"]').click({ position: { x: 10, y: 10 } });
   await expect(page.locator('[data-testid="bottom-sheet"]')).toHaveCount(1);
   await expect(page.locator('[data-testid="bottom-sheet"]')).toHaveCount(0, { timeout: 1_000 });

@@ -684,11 +684,11 @@ function Brand() {
   return <div className="brand">Kyelendar<span>.</span></div>;
 }
 
-function TabletModal({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
+function TabletModal({ label, className = "", overlayClassName = "", children }: { label: string; className?: string; overlayClassName?: string; children: ReactNode }) {
   const reduceMotion = useReducedMotion();
   const duration = reduceMotion ? 0.01 : 0.2;
   return (
-    <motion.div className="tablet-modal-overlay" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration }}>
+    <motion.div className={`tablet-modal-overlay ${overlayClassName}`} role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration }}>
       <motion.section
         className={`tablet-modal ${className}`}
         role="dialog"
@@ -876,14 +876,15 @@ function DeleteAccountModal({ onClose, onDeleted }: { onClose: () => void; onDel
   );
 }
 
-function LogoutConfirmModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
-  return (
-    <TabletModal label="로그아웃 확인">
+function LogoutConfirmModal({ onClose, onConfirm, portalContainer }: { onClose: () => void; onConfirm: () => void; portalContainer?: HTMLElement | null }) {
+  const modal = (
+    <TabletModal label="로그아웃 확인" overlayClassName="logout-confirm-overlay">
       <header><div><p className="section-label">계정</p><h2>로그아웃할까요?</h2></div><button onClick={onClose} aria-label="닫기"><Cross2Icon /></button></header>
       <p className="logout-confirm-message">현재 기기에서 Kyelendar 계정을 로그아웃합니다.</p>
       <div className="logout-confirm-actions"><button type="button" onClick={onClose}>취소</button><button type="button" onClick={onConfirm}><ExitIcon />로그아웃</button></div>
     </TabletModal>
   );
+  return portalContainer ? createPortal(modal, portalContainer) : modal;
 }
 
 function AuthField({ icon, label, ...props }: InputHTMLAttributes<HTMLInputElement> & { icon: ReactNode; label: string }) {
@@ -1509,7 +1510,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       <AnimatePresence>
         {myPageOpen && profile ? <MyPageSheet key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} onLogout={() => setLogoutConfirmOpen(true)} /> : null}
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
-        {logoutConfirmOpen ? <LogoutConfirmModal key="logout-confirm" onClose={() => setLogoutConfirmOpen(false)} onConfirm={onLogout} /> : null}
+        {logoutConfirmOpen ? <LogoutConfirmModal key="logout-confirm" portalContainer={screenRef.current} onClose={() => setLogoutConfirmOpen(false)} onConfirm={onLogout} /> : null}
       </AnimatePresence>
       {portalReady && screenRef.current && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen && !logoutConfirmOpen ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
