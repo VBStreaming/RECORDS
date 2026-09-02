@@ -1269,19 +1269,22 @@ function unreviewedCandidateFields(candidate: Candidate | undefined, index: numb
   return candidateReviewFields(candidate).filter((field) => !reviewed.includes(field));
 }
 
-function AnalysisReview({ candidates, selected, warnings, reviewRequired, onSelect }: { candidates: Candidate[]; selected: number; warnings: string[]; reviewRequired: boolean; onSelect: (candidate: Candidate, index: number) => void }) {
+function AnalysisReview({ candidates, selected, warnings, reviewRequired, onSelect, onDelete }: { candidates: Candidate[]; selected: number; warnings: string[]; reviewRequired: boolean; onSelect: (candidate: Candidate, index: number) => void; onDelete: (index: number) => void }) {
   if (!candidates.length && !warnings.length) return null;
   return (
     <div className="analysis-review" role="status">
-      {candidates.length > 1 ? (
+      {candidates.length ? (
         <div className="candidate-list" aria-label="AI 분석 후보">
           {candidates.map((candidate, index) => (
-            <button type="button" className={index === selected ? "active" : ""} key={`${candidate.title}-${index}`} onClick={() => onSelect(candidate, index)}>
-              {index + 1}. {candidate.title || "제목 확인 필요"}
-            </button>
+            <div className="candidate-item" key={`${candidate.title}-${index}`}>
+              <button type="button" className={`candidate-option ${index === selected ? "active" : ""}`} onClick={() => onSelect(candidate, index)}>
+                {index + 1}. {candidate.title || "제목 확인 필요"}
+              </button>
+              <button type="button" className="candidate-delete" onClick={() => onDelete(index)} aria-label={`${index + 1}번 후보 삭제`}><Cross2Icon /></button>
+            </div>
           ))}
-          </div>
-        ) : null}
+        </div>
+      ) : null}
       {reviewRequired ? <p>주황색 입력값을 직접 확인해 주세요.</p> : null}
       {warnings.map((warning) => <p key={warning}>{warning}</p>)}
     </div>
@@ -1457,6 +1460,22 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     setReviewedFields((current) => current[key]?.includes(field) ? current : { ...current, [key]: [...(current[key] || []), field] });
   };
 
+  const removeCandidate = (index: number) => {
+    const remaining = candidates.filter((_, candidateIndex) => candidateIndex !== index);
+    const nextIndex = index < selectedCandidate
+      ? selectedCandidate - 1
+      : Math.min(selectedCandidate, Math.max(remaining.length - 1, 0));
+    setCandidates(remaining);
+    setSelectedCandidate(remaining.length ? nextIndex : 0);
+    if (index === selectedCandidate && remaining.length) applyCandidate(remaining[nextIndex], nextIndex);
+    if (!remaining.length) {
+      setTitle("");
+      setSubject("");
+      setDueDate(calendar.selectedDate);
+      setDueTime("18:00");
+    }
+  };
+
   const analyzePhoto = async (selectedFile: File) => {
     setBusy(true);
     setError("");
@@ -1485,12 +1504,27 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       const createdTask = taskFromAssignment(created);
       setTasks((current) => [...current, createdTask]);
       calendar.selectDate(createdTask.date);
-      setTitle("");
-      setFile(null);
-      setNotificationsEnabled(true);
-      setCandidates([]);
-      setAnalysisWarnings([]);
-      setSheetOpen(false);
+      if (candidates.length) {
+        const remaining = candidates.filter((_, candidateIndex) => candidateIndex !== selectedCandidate);
+        const nextIndex = Math.min(selectedCandidate, Math.max(remaining.length - 1, 0));
+        setCandidates(remaining);
+        setSelectedCandidate(remaining.length ? nextIndex : 0);
+        if (remaining.length) {
+          applyCandidate(remaining[nextIndex], nextIndex);
+        } else {
+          setTitle("");
+          setSubject("");
+          setDueDate(calendar.selectedDate);
+          setDueTime("18:00");
+        }
+      } else {
+        setTitle("");
+        setFile(null);
+        setNotificationsEnabled(true);
+        setCandidates([]);
+        setAnalysisWarnings([]);
+        setSheetOpen(false);
+      }
     } catch (saveError) {
       setError(apiErrorMessage(saveError));
     } finally {
@@ -1581,7 +1615,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         <div className="add-form">
           <PhotoPicker file={file} onRequestSelect={() => openPhotoInput(false)} onRequestCamera={() => openPhotoInput(true)} />
           {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
-          <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} reviewRequired={unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).length > 0} onSelect={applyCandidate} />
+          <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} reviewRequired={unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).length > 0} onSelect={applyCandidate} onDelete={removeCandidate} />
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
           <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => { setTitle(event.target.value); markFieldReviewed("title", event.target.value); }} placeholder="과제명을 입력하세요" /></label>
           <div className="form-row">
@@ -1798,6 +1832,22 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     setReviewedFields((current) => current[key]?.includes(field) ? current : { ...current, [key]: [...(current[key] || []), field] });
   };
 
+  const removeCandidate = (index: number) => {
+    const remaining = candidates.filter((_, candidateIndex) => candidateIndex !== index);
+    const nextIndex = index < selectedCandidate
+      ? selectedCandidate - 1
+      : Math.min(selectedCandidate, Math.max(remaining.length - 1, 0));
+    setCandidates(remaining);
+    setSelectedCandidate(remaining.length ? nextIndex : 0);
+    if (index === selectedCandidate && remaining.length) applyCandidate(remaining[nextIndex], nextIndex);
+    if (!remaining.length) {
+      setTitle("");
+      setSubject("");
+      setDueDate(calendar.selectedDate);
+      setDueTime("18:00");
+    }
+  };
+
   const analyzePhoto = async (selectedFile: File) => {
     setBusy(true);
     setError("");
@@ -1826,12 +1876,27 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
       const createdTask = taskFromAssignment(created);
       setTasks((current) => [...current, createdTask]);
       calendar.selectDate(createdTask.date);
-      setTitle("");
-      setFile(null);
-      setNotificationsEnabled(true);
-      setCandidates([]);
-      setAnalysisWarnings([]);
-      setAddOpen(false);
+      if (candidates.length) {
+        const remaining = candidates.filter((_, candidateIndex) => candidateIndex !== selectedCandidate);
+        const nextIndex = Math.min(selectedCandidate, Math.max(remaining.length - 1, 0));
+        setCandidates(remaining);
+        setSelectedCandidate(remaining.length ? nextIndex : 0);
+        if (remaining.length) {
+          applyCandidate(remaining[nextIndex], nextIndex);
+        } else {
+          setTitle("");
+          setSubject("");
+          setDueDate(calendar.selectedDate);
+          setDueTime("18:00");
+        }
+      } else {
+        setTitle("");
+        setFile(null);
+        setNotificationsEnabled(true);
+        setCandidates([]);
+        setAnalysisWarnings([]);
+        setAddOpen(false);
+      }
     } catch (saveError) {
       setError(apiErrorMessage(saveError));
     } finally {
@@ -1924,7 +1989,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
             <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
             <PhotoPicker file={file} onRequestSelect={() => openPhotoInput(false)} onRequestCamera={() => openPhotoInput(true)} />
             {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
-            <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} reviewRequired={unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).length > 0} onSelect={applyCandidate} />
+            <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} reviewRequired={unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).length > 0} onSelect={applyCandidate} onDelete={removeCandidate} />
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
             <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => { setTitle(event.target.value); markFieldReviewed("title", event.target.value); }} placeholder="과제명을 입력하세요" /></label>
             <div className="form-row">

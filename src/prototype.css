@@ -896,7 +896,14 @@ button {
   overflow-x: auto;
 }
 
-.candidate-list button {
+.candidate-item {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: min(100%, 420px);
+}
+
+.candidate-list .candidate-option {
   flex: 0 0 auto;
   padding: 7px 9px;
   border: 1px solid var(--line);
@@ -906,9 +913,27 @@ button {
   font-size: 10px;
 }
 
-.candidate-list button.active,
+.candidate-list .candidate-option.active,
 .review-needed input {
   border-color: var(--accent);
+}
+
+.candidate-delete {
+  display: grid;
+  width: 28px;
+  min-width: 28px;
+  margin-left: 4px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+.candidate-delete svg {
+  width: 13px;
+  height: 13px;
 }
 
 .alarm-toggle {
@@ -2282,7 +2307,7 @@ button {
     overflow: visible;
   }
 
-  .candidate-list button {
+  .candidate-list .candidate-option {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
@@ -2290,5 +2315,28 @@ button {
     padding: 9px 11px;
     text-align: left;
     line-height: 1.4;
+  }
+
+  .candidate-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 36px;
+    width: 100%;
+    max-width: none;
+  }
+
+  .candidate-list .candidate-option {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    padding: 9px 11px;
+    text-align: left;
+    line-height: 1.4;
+  }
+
+  .candidate-list .candidate-delete {
+    width: 36px;
+    min-width: 36px;
+    margin-left: 6px;
   }
 }
