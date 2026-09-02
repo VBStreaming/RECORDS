@@ -5,7 +5,6 @@ async function chooseAssignmentPhoto(page: Page) {
   await page.getByRole("button", { name: "과제 추가", exact: true }).click();
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "칠판 또는 유인물 사진 선택" }).click();
-  await page.getByRole("button", { name: "갤러리 선택" }).click();
   await (await chooser).setFiles({
     name: "assignment.png",
     mimeType: "image/png",
@@ -255,10 +254,20 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: createdAssignment ? [createdAssignment] : [] }) });
       return;
     }
-    if (url.pathname === "/assignments" && request.method() === "POST") {
-      const payload = request.postDataJSON() as { title: string; subject: string; dueAt: string };
-      createdAssignment = { id: "assignment-1", ...payload, completed: false, completedAt: null, dayOffset: 1, deadlineLabel: "D-1" };
-      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: createdAssignment }) });
+    if (url.pathname === "/assignment-extractions") {
+      const imageId = request.headers()["x-client-image-id"];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: {
+        extractionBatchId: request.headers()["x-extraction-batch-id"], referenceDate: "2026-09-02", timezone: "Asia/Seoul",
+        images: [{ imageId, imageIndex: 0, status: "COMPLETED", assignments: [{ assignmentId: "draft-1", sourceOrder: 0, title: "새 과제", subject: "자율", startDate: null, dueDate: null, dueTime: null, sourceText: "", confidence: null, needsReview: true, warnings: [], possibleDuplicateOf: null }], errorMessage: null }],
+        summary: { totalImages: 1, completedImages: 1, failedImages: 0, totalAssignments: 1 },
+      } }) });
+      return;
+    }
+    if (url.pathname === "/assignments/batch" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { assignments: Array<{ title: string; subject: string; dueDate: string; dueTime: string | null; reminderEnabled: boolean; startDate: string | null }> };
+      const item = payload.assignments[0];
+      createdAssignment = { id: "assignment-1", title: item.title, subject: item.subject, dueAt: `${item.dueDate}T${item.dueTime || "23:59"}:00+09:00`, dueTime: item.dueTime, notificationsEnabled: item.reminderEnabled, startDate: item.startDate, completed: false, completedAt: null, dayOffset: 1, deadlineLabel: "D-1" };
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: [createdAssignment] }) });
       return;
     }
     if (url.pathname.startsWith("/notifications")) {
@@ -279,11 +288,12 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
   });
   const [nextYear, nextMonth] = nextMonthDate.split("-");
   await chooseAssignmentPhoto(page);
-  await page.getByRole("textbox", { name: "과제명" }).fill("다음 달 과제");
-  await page.getByRole("textbox", { name: "과목" }).fill("자율");
-  await page.getByRole("textbox", { name: "마감일" }).fill(nextMonthDate);
-  await page.getByRole("checkbox", { name: "마감 알림 받기" }).uncheck();
-  await page.getByRole("button", { name: "과제 저장" }).click();
+  await expect(page.getByRole("textbox", { name: "과제명 1" })).toHaveValue("새 과제");
+  await page.getByRole("textbox", { name: "과제명 1" }).fill("다음 달 과제");
+  await page.getByRole("textbox", { name: "과목 1" }).fill("자율");
+  await page.getByRole("textbox", { name: "마감일 1" }).fill(nextMonthDate);
+  await page.getByRole("checkbox", { name: "마감 알림 받기 1" }).uncheck();
+  await page.getByRole("button", { name: "선택한 1개 과제 저장" }).click();
   expect((createdAssignment as Record<string, unknown>).notificationsEnabled).toBe(false);
 
   await expect(page.locator(".calendar-card").getByRole("heading", { name: `${nextYear}. ${nextMonth}` })).toBeVisible();
@@ -323,23 +333,24 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
   await expect(page.locator(".mobile-cursor")).toHaveCount(0);
 });
 
-test("photo analysis requires an explicit action and supports candidate review", async ({ page }) => {
+test("photo analysis starts after selection and reviews every extracted assignment", async ({ page }) => {
   let extractionRequests = 0;
   await page.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     if (url.pathname === "/assignment-extractions") {
       extractionRequests += 1;
+      const imageId = request.headers()["x-client-image-id"];
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ success: true, data: {
-          candidates: [
-            { title: "첫 후보", subject: "수학", dueAt: null, needsReview: ["dueAt"] },
-            { title: "두 번째 후보", subject: "직접 입력 과목", dueAt: "2030-09-10T09:00:00+09:00", needsReview: [] },
-          ],
-          requiresConfirmation: true,
-          warnings: ["날짜가 불명확한 후보가 있습니다."],
+          extractionBatchId: request.headers()["x-extraction-batch-id"], referenceDate: "2026-09-02", timezone: "Asia/Seoul",
+          images: [{ imageId, imageIndex: 0, status: "COMPLETED", assignments: [
+            { assignmentId: "draft-1", sourceOrder: 0, title: "첫 후보", subject: "수학", startDate: null, dueDate: null, dueTime: null, sourceText: "첫 후보", confidence: null, needsReview: true, warnings: ["날짜가 불명확한 후보입니다."], possibleDuplicateOf: null },
+            { assignmentId: "draft-2", sourceOrder: 1, title: "두 번째 후보", subject: "직접 입력 과목", startDate: null, dueDate: "2030-09-10", dueTime: "09:00", sourceText: "두 번째 후보", confidence: null, needsReview: false, warnings: [], possibleDuplicateOf: null },
+          ], errorMessage: null }],
+          summary: { totalImages: 1, completedImages: 1, failedImages: 0, totalAssignments: 2 },
         } }),
       });
       return;
@@ -368,16 +379,13 @@ test("photo analysis requires an explicit action and supports candidate review",
   await chooseAssignmentPhoto(page);
   await expect(page.locator('input[type="file"]')).toHaveCount(1);
   await expect(page.locator('input[type="file"]:not([capture])')).toHaveCount(1);
-  expect(extractionRequests).toBe(0);
-  await page.getByRole("button", { name: "사진 분석" }).click();
   await expect.poll(() => extractionRequests).toBe(1);
-  await expect(page.getByRole("button", { name: "1. 첫 후보" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("");
-  await expect(page.getByRole("button", { name: "과제 저장" })).toBeDisabled();
-  await page.getByRole("button", { name: "2. 두 번째 후보" }).click();
-  await expect(page.getByRole("textbox", { name: "과제명" })).toHaveValue("두 번째 후보");
-  await expect(page.getByRole("textbox", { name: "과목" })).toHaveValue("직접 입력 과목");
-  await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("2030-09-10");
+  await expect(page.locator(".assignment-draft-card")).toHaveCount(2);
+  await expect(page.getByRole("textbox", { name: "마감일 1" })).toHaveValue("");
+  await expect(page.getByRole("button", { name: "선택한 2개 과제 저장" })).toBeDisabled();
+  await expect(page.getByRole("textbox", { name: "과제명 2" })).toHaveValue("두 번째 후보");
+  await expect(page.getByRole("textbox", { name: "과목 2" })).toHaveValue("직접 입력 과목");
+  await expect(page.getByRole("textbox", { name: "마감일 2" })).toHaveValue("2030-09-10");
 
   await page.setViewportSize({ width: 844, height: 390 });
   await expect(page.locator(".flow-stack")).toBeVisible();
