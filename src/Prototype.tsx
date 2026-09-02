@@ -1281,18 +1281,19 @@ function useAuthExpiredRedirect() {
 function useBottomSheetOverscroll(active: boolean) {
   useEffect(() => {
     if (!active) return;
-    const content = document.querySelector<HTMLElement>('[data-testid="bottom-sheet"] .sheet-content');
-    if (!content) return;
+    const sheet = document.querySelector<HTMLElement>('[data-testid="bottom-sheet"]');
+    const content = sheet?.querySelector<HTMLElement>('.sheet-content');
+    if (!sheet || !content) return;
     let startY = 0;
     let pulling = false;
     const reset = () => {
-      content.style.transition = "transform 280ms cubic-bezier(.22, 1, .36, 1)";
-      content.style.transform = "translateY(0)";
+      sheet.style.transition = "translate 280ms cubic-bezier(.22, 1, .36, 1)";
+      sheet.style.translate = "0 0";
       pulling = false;
     };
     const onTouchStart = (event: TouchEvent) => {
       startY = event.touches[0]?.clientY ?? 0;
-      content.style.transition = "none";
+      sheet.style.transition = "none";
       pulling = false;
     };
     const onTouchMove = (event: TouchEvent) => {
@@ -1307,9 +1308,9 @@ function useBottomSheetOverscroll(active: boolean) {
       pulling = true;
       event.preventDefault();
       const distance = Math.sign(delta) * 28 * (1 - Math.exp(-Math.abs(delta) / 100));
-      content.style.transform = `translateY(${distance}px)`;
+      sheet.style.translate = `0 ${distance}px`;
     };
-    content.style.willChange = "transform";
+    sheet.style.willChange = "translate";
     content.style.overscrollBehaviorY = "contain";
     content.addEventListener("touchstart", onTouchStart, { passive: true });
     content.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -1320,9 +1321,9 @@ function useBottomSheetOverscroll(active: boolean) {
       content.removeEventListener("touchmove", onTouchMove);
       content.removeEventListener("touchend", reset);
       content.removeEventListener("touchcancel", reset);
-      content.style.transform = "";
-      content.style.transition = "";
-      content.style.willChange = "";
+      sheet.style.translate = "";
+      sheet.style.transition = "";
+      sheet.style.willChange = "";
       content.style.overscrollBehaviorY = "";
     };
   }, [active]);
