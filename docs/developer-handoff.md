@@ -22,9 +22,13 @@
 
 새로고침·동시 API 요청·여러 탭·offline sync가 refresh rotation과 겹치는 회귀 테스트를 추가했고, 먼저 성공한 새 token을 뒤늦은 요청이 지우지 않도록 처리했다.
 
-### AI 사진 분석
+### AI 사진 분석·다건 저장
 
-사진을 선택한 뒤 `사진 분석`을 눌러야 `POST /assignment-extractions`를 호출한다. 후보가 여러 개면 사용자가 선택하고, `needsReview` 필드는 주황색으로 강조한다. 날짜가 없는 후보는 날짜 입력을 비워 저장을 막으며 사용자가 직접 확인하게 한다. 사진 분석 실패, 오프라인, 서버의 AI 비활성화는 폼 오류로 표시한다.
+사진 선택은 서비스 자체 카메라/갤러리 UI가 아니라 `accept="image/*" multiple` 파일 입력으로 Android·브라우저 시스템 선택기를 호출한다. 선택한 모든 사진을 이미지별로 `POST /assignment-extractions`에 전송하고, `X-Extraction-Batch-Id`, `X-Client-Image-Id`, `X-Image-Index` 헤더로 원본 사진을 추적한다.
+
+각 응답의 `images[].assignments[]`를 모두 검토 목록으로 합친다. 사진별 분석 실패는 해당 사진만 `FAILED`로 남기고 성공한 사진 결과를 유지하며, 실패 사진만 재시도할 수 있다. OCR 결과는 자동 저장하지 않고 사용자가 과제별 제목·과목·시작일·마감일·마감 시간·알림·선택 상태를 확인한 뒤 `POST /assignments/batch`로 한 번에 저장한다.
+
+다건 저장은 `Idempotency-Key`와 서버의 `assignment_batch_requests`로 중복 생성을 막는다. `startDate`와 `dueTime`은 선택값이고 시작일은 마감일보다 늦을 수 없다. 시간이 없으면 서버는 응답과 DB의 `dueTime`을 `null`로 보존하며 알림 계산용 `dueAt`만 23:59로 둔다.
 
 ### 사진 저장
 
