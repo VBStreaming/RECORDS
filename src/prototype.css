@@ -798,6 +798,12 @@ button {
   font-size: 10px;
 }
 
+.photo-field.source-open {
+  height: auto;
+  min-height: 86px;
+  padding-bottom: 10px;
+}
+
 .photo-field svg {
   display: block;
   flex: 0 0 21px;
@@ -835,236 +841,32 @@ button {
   font-size: 9px;
 }
 
-.selected-photo-list {
+.photo-source-options {
   display: flex;
   gap: 8px;
-  overflow-x: auto;
-  padding: 2px 1px 4px;
+  width: 100%;
+  padding: 10px 12px 0;
+  box-sizing: border-box;
 }
 
-.selected-photo {
-  position: relative;
-  flex: 0 0 72px;
-  display: grid;
-  gap: 3px;
-  color: var(--muted);
-  font-size: 9px;
-  text-align: center;
-}
-
-.selected-photo > button:first-child {
-  display: grid;
-  gap: 3px;
-  padding: 0;
-  border: 2px solid transparent;
+.photo-source-options button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-}
-
-.selected-photo.active > button:first-child {
-  border-color: var(--accent);
-}
-
-.selected-photo img {
-  width: 68px;
-  height: 58px;
-  object-fit: cover;
-  border-radius: 8px;
-  background: var(--field);
-}
-
-.selected-photo-remove {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--surface);
-  border-radius: 50%;
   color: var(--ink);
-  background: #4a4e52;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.composer-actions,
-.review-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
-}
-
-.secondary-action,
-.review-toolbar button {
-  min-height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  color: var(--ink);
-  background: var(--surface-soft);
+  background: var(--surface);
   font-size: 10px;
   font-weight: 700;
 }
 
-.secondary-action:disabled {
-  opacity: .45;
-}
-
-.analysis-summary {
-  display: grid;
-  gap: 3px;
-  padding: 10px 12px;
-  border-radius: 11px;
-  color: var(--muted);
-  background: var(--surface-soft);
-  font-size: 10px;
-}
-
-.analysis-summary strong {
-  color: var(--ink);
-}
-
-.analysis-failure,
-.analysis-notice {
-  color: var(--accent);
-}
-
-.review-toolbar {
-  justify-content: space-between;
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.review-toolbar input,
-.assignment-draft-card header input {
-  accent-color: var(--accent);
-}
-
-.assignment-draft-card {
-  display: grid;
-  gap: 12px;
-  padding: 13px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-soft);
-}
-
-.assignment-draft-card > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.assignment-draft-card > header label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-
-.draft-badges {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.draft-badge {
-  padding: 3px 6px;
-  border-radius: 999px;
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.review-badge {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.duplicate-badge {
-  color: #e0a66b;
-  background: rgb(224 166 107 / 12%);
-}
-
-.assignment-draft-card > header button {
-  padding: 3px 7px;
-  border: 0;
-  border-radius: 6px;
-  color: #e17777;
-  background: transparent;
-  font-size: 9px;
-}
-
-.draft-fields {
-  display: grid;
-  gap: 11px;
-}
-
-.date-with-clear {
-  display: flex;
-  gap: 5px;
-  min-width: 0;
-}
-
-.date-with-clear input {
-  flex: 1;
-}
-
-.date-with-clear button {
-  flex: 0 0 auto;
-  padding: 0 7px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--muted);
-  background: var(--surface-soft);
-  font-size: 9px;
-}
-
-.add-start-date {
-  align-self: end;
-  min-height: 42px;
-  border: 1px dashed var(--line);
-  border-radius: 11px;
-  color: var(--muted);
-  background: transparent;
-  font-size: 10px;
-}
-
-.draft-warnings {
-  display: grid;
-  gap: 4px;
-  color: var(--accent);
-  font-size: 9px;
-}
-
-.assignment-draft-card details {
-  color: var(--muted);
-  font-size: 9px;
-}
-
-.assignment-draft-card details p {
-  margin: 5px 0 0;
-  line-height: 1.5;
-}
-
-.empty-analysis {
-  padding: 18px 10px;
-  color: var(--muted);
-  border: 1px dashed var(--line);
-  border-radius: 12px;
-  font-size: 10px;
-  text-align: center;
+.photo-source-options svg {
+  width: 15px;
+  height: 15px;
 }
 
 .analyze-button {

@@ -22,17 +22,17 @@
 
 새로고침·동시 API 요청·여러 탭·offline sync가 refresh rotation과 겹치는 회귀 테스트를 추가했고, 먼저 성공한 새 token을 뒤늦은 요청이 지우지 않도록 처리했다.
 
-### AI 사진 분석·다건 저장
+### AI 사진 분석·과제 저장
 
-사진 선택은 서비스 자체 카메라/갤러리 UI가 아니라 `accept="image/*" multiple` 파일 입력으로 Android·브라우저 시스템 선택기를 호출한다. 선택한 모든 사진을 이미지별로 `POST /assignment-extractions`에 전송하고, `X-Extraction-Batch-Id`, `X-Client-Image-Id`, `X-Image-Index` 헤더로 원본 사진을 추적한다.
+사진 선택은 기존 UI의 카메라·갤러리 버튼으로 Android·브라우저 시스템 선택기를 호출한다. 갤러리 입력은 `accept="image/*"`, 카메라 입력은 `capture="environment"`를 사용하며 한 번에 한 장만 선택한다.
 
-각 응답의 `images[].assignments[]`를 모두 검토 목록으로 합친다. 사진별 분석 실패는 해당 사진만 `FAILED`로 남기고 성공한 사진 결과를 유지하며, 실패 사진만 재시도할 수 있다. OCR 결과는 자동 저장하지 않고 사용자가 과제별 제목·과목·시작일·마감일·마감 시간·알림·선택 상태를 확인한 뒤 `POST /assignments/batch`로 한 번에 저장한다.
+선택한 사진 한 장을 `POST /assignment-extractions`에 전송하고 `images[].assignments[]`를 후보 목록으로 보여준다. OCR 결과는 자동 저장하지 않고 사용자가 후보 하나의 제목·과목·마감일·마감 시간·알림을 확인한 뒤 `POST /assignments`로 저장한다.
 
-다건 저장은 `Idempotency-Key`와 서버의 `assignment_batch_requests`로 중복 생성을 막는다. `startDate`와 `dueTime`은 선택값이고 시작일은 마감일보다 늦을 수 없다. 시간이 없으면 서버는 응답과 DB의 `dueTime`을 `null`로 보존하며 알림 계산용 `dueAt`만 23:59로 둔다.
+백엔드의 `POST /assignments/batch`와 `assignment_batch_requests`는 기존 다건 API 호환을 위해 유지한다. 단일 사진 입력 화면에서는 사용하지 않는다. `dueTime`은 선택값이고, 시간이 없으면 서버는 응답과 DB의 `dueTime`을 `null`로 보존하며 알림 계산용 `dueAt`만 23:59로 둔다.
 
 ### 사진 저장
 
-`downloadCalendarImage()`는 canvas로 월간 달력을 PNG로 만든 뒤 공유창 없이 브라우저 다운로드로 저장한다. 과제에 사용한 원본 사진은 서버에 저장하지 않는다. `사진으로 추가`는 `accept="image/*"` 파일 입력을 직접 열고 `capture`를 지정하지 않아 모바일 OS가 카메라와 사진 보관함 선택지를 제공한다.
+`downloadCalendarImage()`는 canvas로 월간 달력을 PNG로 만든 뒤 공유창 없이 브라우저 다운로드로 저장한다. 과제에 사용한 원본 사진은 서버에 저장하지 않는다. `사진으로 추가`는 기존 카메라·갤러리 선택 UI를 통해 한 장의 사진만 입력받는다.
 
 ### 알림
 

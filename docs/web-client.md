@@ -9,8 +9,7 @@
 - 이메일·비밀번호 회원가입·인증·로그인과 비밀번호 재설정
 - 대시보드와 월간 과제 조회
 - 과제 직접 생성과 완료/완료 취소
-- 사진 한 장 또는 여러 장 선택 후 이미지별 자동 AI 분석과 다건 결과 검토
-- 여러 사진에서 추출된 모든 과제를 수정·선택·삭제한 뒤 일괄 저장
+- 사진 한 장 선택 후 AI 분석 후보를 확인·수정해 저장
 - 데스크톱과 모바일 레이아웃, 라이트·다크 테마
 
 소셜 로그인은 현재 범위가 아니다. 과제 수정·삭제, 오프라인 동기화, refresh token rotation을 포함한다.
@@ -36,9 +35,9 @@ make frontend-dev
 - 로그인 화면의 비밀번호 찾기는 `/forgot-password`에서 계정 존재 여부를 노출하지 않는 공통 완료 문구를 사용한다.
 - access token과 refresh token은 `localStorage`에 저장한다. access token이 만료되면 refresh token rotation 후 원래 요청을 한 번 재시도한다.
 - 인증된 사용자 ID는 token에서만 결정하며 웹 요청에 `user_id`를 넣지 않는다.
-- 사진 선택은 서비스 자체 카메라/갤러리 UI가 아니라 `accept="image/*" multiple` 파일 입력으로 Android·브라우저 시스템 선택기를 호출한다. `capture`는 지정하지 않는다.
-- 선택한 모든 사진을 이미지별로 `POST /assignment-extractions`에 전송한다. 각 응답의 `images[].assignments[]`를 원본 이미지 ID와 함께 검토 목록으로 합치며, 분석 실패 사진은 다른 결과를 지우지 않고 재시도한다.
-- 추출 결과는 자동 저장하지 않는다. 사용자가 제목·과목·시작일·마감일·마감 시간·알림과 선택 상태를 확인한 뒤 `POST /assignments/batch`로 선택 과제를 한 트랜잭션에 저장한다.
+- 사진 선택은 기존 카메라/갤러리 선택 UI를 유지하며, 갤러리 입력은 `accept="image/*"`, 카메라 입력은 `capture="environment"`로 Android·브라우저 시스템 선택기를 호출한다. `multiple`은 사용하지 않는다.
+- 선택한 한 사진을 `POST /assignment-extractions`에 전송하고 응답의 `images[].assignments[]`를 후보 목록으로 표시한다. 사용자는 후보를 전환·수정한 뒤 하나만 저장한다.
+- 추출 결과는 자동 저장하지 않는다. 사용자가 제목·과목·마감일·마감 시간·알림을 확인한 뒤 `POST /assignments`로 저장한다.
 - `startDate`는 선택값이며, 기간이 아니면 `null`이다. `dueTime`도 선택값이며, 비어 있으면 서버가 마감일만 보존하고 스케줄 계산용 `dueAt`은 23:59로 둔다.
 - 생성·수정의 `마감 알림 받기` 토글은 `notificationsEnabled`로 전송한다.
 - 캘린더 PNG는 공유창을 열지 않고 브라우저 다운로드로 기기에 저장한다.
