@@ -1446,7 +1446,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         {myPageOpen && profile ? <MyPageSheet key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} /> : null}
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
       </AnimatePresence>
-      {portalReady && screenRef.current && !sheetOpen && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? createPortal(
+      {portalReady && screenRef.current && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
           <button className="photo-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }}><PlusIcon /> 과제 추가</button>
         </nav>, screenRef.current,
@@ -1765,7 +1765,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
       </aside>
       <section className="tablet-content">
-        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button>{!addOpen && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? <button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><PlusIcon />과제 추가</button> : null}</div></header>
+        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button>{!editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? <button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><PlusIcon />과제 추가</button> : null}</div></header>
         {view === "dashboard" ? (
           <div className="tablet-grid">
             <div className="tablet-left">

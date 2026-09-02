@@ -388,6 +388,7 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.getByRole("button", { name: "과제 추가", exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "과제 추가", exact: true }).click();
   await expect(page.getByRole("heading", { name: "새 과제 추가" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "과제 추가", exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "칠판 또는 유인물 사진 선택" })).toBeVisible();
   await expect(page.locator('input[type="file"][accept="image/*"]')).toHaveCount(1);
 });
