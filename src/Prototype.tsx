@@ -796,6 +796,7 @@ function MyPageSheet({ profile, onClose, onProfileUpdated, onPasswordChanged, on
   onPasswordChanged: () => void;
   onDeleteAccount: () => void;
 }) {
+  useBottomSheetOverscroll(true);
   useEffect(() => {
     const sheet = document.querySelector<HTMLElement>('[data-testid="bottom-sheet"]');
     const content = sheet?.querySelector<HTMLElement>('.sheet-content');
@@ -1366,7 +1367,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
   const deadline = deadlineSummary(tasks);
-  useBottomSheetOverscroll(sheetOpen || Boolean(editingTask) || calendarSaveOpen || myPageOpen || deleteAccountOpen);
+  useBottomSheetOverscroll(sheetOpen || Boolean(editingTask) || calendarSaveOpen || deleteAccountOpen);
 
   const saveCalendarImage = async (preset: CalendarImagePreset) => {
     setCalendarSaveBusy(true);
