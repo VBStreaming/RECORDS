@@ -529,10 +529,19 @@ button {
   font-weight: 800;
 }
 
+.day.today {
+  color: #e05252;
+  font-weight: 800;
+}
+
 .day.selected {
   color: var(--selected-ink);
   background: var(--accent);
   font-weight: 900;
+}
+
+.day.today.selected {
+  background: #e05252;
 }
 
 .day i {
@@ -1681,6 +1690,11 @@ button {
   color: var(--selected-ink);
   border-color: var(--accent);
   background: var(--accent);
+}
+
+.tablet-dashboard .calendar-card.expanded .day.today.selected {
+  border-color: #e05252;
+  background: #e05252;
 }
 
 .calendar-task-preview {

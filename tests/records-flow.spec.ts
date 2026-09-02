@@ -362,6 +362,8 @@ test("photo analysis requires an explicit action and supports candidate review",
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?screen=dashboard&theme=light");
   await expect(page.getByRole("button", { name: "과제 추가", exact: true })).toHaveCount(1);
+  await expect(page.locator(".day.today")).toHaveCount(1);
+  await expect(page.locator(".day.today.selected")).toHaveCSS("background-color", "rgb(224, 82, 82)");
   await chooseAssignmentPhoto(page);
   await expect(page.locator('input[type="file"]')).toHaveCount(1);
   await expect(page.locator('input[type="file"]:not([capture])')).toHaveCount(1);

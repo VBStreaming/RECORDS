@@ -210,7 +210,7 @@ function drawCalendarCard(
   y: number,
   width: number,
   height: number,
-  palette: { ink: string; muted: string; card: string; line: string; accent: string; selectedInk: string },
+  palette: { ink: string; muted: string; card: string; line: string; accent: string; today: string; selectedInk: string },
 ) {
   const landscape = width > height;
 
@@ -253,13 +253,14 @@ function drawCalendarCard(
     const date = isoDate(calendar.year, calendar.month, day);
     const dateTasks = tasks.filter((task) => task.date === date);
     const selected = date === calendar.selectedDate;
-    if (selected) {
-      ctx.fillStyle = palette.accent;
+    const isToday = date === todayInSeoul();
+    if (selected || isToday) {
+      ctx.fillStyle = isToday ? palette.today : palette.accent;
       ctx.beginPath();
       ctx.arc(centerX, dateY - 7, 27, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = selected ? palette.selectedInk : palette.ink;
+    ctx.fillStyle = selected || isToday ? palette.selectedInk : palette.ink;
     ctx.font = `${selected ? "900" : "500"} 19px Roboto, system-ui, sans-serif`;
     ctx.fillText(String(day), centerX, dateY);
     dateTasks.slice(0, 3).forEach((task, taskIndex) => {
@@ -352,8 +353,8 @@ async function downloadCalendarImage(
   if (!ctx) throw new Error("이미지를 생성할 수 없습니다.");
 
   const palette = theme === "dark"
-    ? { background: "#0f1113", ink: "#f6f4ef", muted: "#898d90", card: "#17191b", line: "#2a2d30", accent: "#ff7a45", selectedInk: "#17191b" }
-    : { background: "#f4f1eb", ink: "#1b1d1f", muted: "#74787a", card: "#fffefa", line: "#ddd8cf", accent: "#f56f3d", selectedInk: "#fffefa" };
+    ? { background: "#0f1113", ink: "#f6f4ef", muted: "#898d90", card: "#17191b", line: "#2a2d30", accent: "#ff7a45", today: "#e05252", selectedInk: "#17191b" }
+    : { background: "#f4f1eb", ink: "#1b1d1f", muted: "#74787a", card: "#fffefa", line: "#ddd8cf", accent: "#f56f3d", today: "#e05252", selectedInk: "#fffefa" };
   const landscape = preset.width > preset.height;
   const designWidth = landscape ? 1600 : 1000;
   const scale = preset.width / designWidth;
@@ -1117,6 +1118,7 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
 
 function CalendarPanel({ calendar, tasks, expanded = false }: { calendar: ReturnType<typeof useCalendar>; tasks: Task[]; expanded?: boolean }) {
   const { year, month, cells, selectedDate, selectDate, changeMonth } = calendar;
+  const today = todayInSeoul();
   return (
     <section className={`calendar-card ${expanded ? "expanded" : ""}`}>
       <div className="calendar-header">
@@ -1134,9 +1136,10 @@ function CalendarPanel({ calendar, tasks, expanded = false }: { calendar: Return
           const dateTasks = tasks.filter((task) => task.date === date);
           const hasTask = dateTasks.some((task) => !task.done);
           const selected = date === selectedDate;
+          const isToday = date === today;
           return (
             <button
-              className={`day ${hasTask ? "has-task" : ""} ${selected ? "selected" : ""}`}
+              className={`day ${hasTask ? "has-task" : ""} ${isToday ? "today" : ""} ${selected ? "selected" : ""}`}
               key={date}
               onClick={() => selectDate(date)}
               aria-label={`${month + 1}월 ${day}일${hasTask ? ", 과제 있음" : ""}`}
