@@ -1278,6 +1278,56 @@ function useAuthExpiredRedirect() {
   }, [flow]);
 }
 
+function useBottomSheetOverscroll(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const content = document.querySelector<HTMLElement>('[data-testid="bottom-sheet"] .sheet-content');
+    if (!content) return;
+    let startY = 0;
+    let pulling = false;
+    const reset = () => {
+      content.style.transition = "transform 280ms cubic-bezier(.22, 1, .36, 1)";
+      content.style.transform = "translateY(0)";
+      pulling = false;
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      startY = event.touches[0]?.clientY ?? 0;
+      content.style.transition = "none";
+      pulling = false;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY;
+      if (currentY === undefined) return;
+      const delta = currentY - startY;
+      const atTop = content.scrollTop <= 0;
+      const atBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 1;
+      const shouldPull = (atTop && delta > 0) || (atBottom && delta < 0);
+      if (!pulling && !shouldPull) return;
+      if (!shouldPull) return reset();
+      pulling = true;
+      event.preventDefault();
+      const distance = Math.sign(delta) * 28 * (1 - Math.exp(-Math.abs(delta) / 100));
+      content.style.transform = `translateY(${distance}px)`;
+    };
+    content.style.willChange = "transform";
+    content.style.overscrollBehaviorY = "contain";
+    content.addEventListener("touchstart", onTouchStart, { passive: true });
+    content.addEventListener("touchmove", onTouchMove, { passive: false });
+    content.addEventListener("touchend", reset, { passive: true });
+    content.addEventListener("touchcancel", reset, { passive: true });
+    return () => {
+      content.removeEventListener("touchstart", onTouchStart);
+      content.removeEventListener("touchmove", onTouchMove);
+      content.removeEventListener("touchend", reset);
+      content.removeEventListener("touchcancel", reset);
+      content.style.transform = "";
+      content.style.transition = "";
+      content.style.willChange = "";
+      content.style.overscrollBehaviorY = "";
+    };
+  }, [active]);
+}
+
 function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const { theme } = useTheme();
   const online = useOnlineStatus();
@@ -1315,6 +1365,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
   const deadline = deadlineSummary(tasks);
+  useBottomSheetOverscroll(sheetOpen || Boolean(editingTask) || calendarSaveOpen || myPageOpen || deleteAccountOpen);
 
   const saveCalendarImage = async (preset: CalendarImagePreset) => {
     setCalendarSaveBusy(true);
@@ -1653,6 +1704,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
   const deadline = deadlineSummary(tasks);
+  useBottomSheetOverscroll(addOpen || Boolean(editingTask) || calendarSaveOpen || myPageOpen || deleteAccountOpen);
 
   const saveCalendarImage = async (preset: CalendarImagePreset) => {
     setCalendarSaveBusy(true);
