@@ -23,6 +23,8 @@ export type Assignment = {
   completedAt: string | null;
   dayOffset: number;
   deadlineLabel: string;
+  startDate: string | null;
+  dueTime?: string | null;
 };
 export type AppNotification = {
   id: string;
@@ -37,10 +39,36 @@ export type AppNotification = {
   readAt: string | null;
 };
 export type NotificationPreferences = { beforeDeadlineMinutes: 10 | 30 | 60 };
-export type Candidate = { title: string; subject: string | null; dueAt: string | null; needsReview: string[] };
-export type Extraction = { candidates: Candidate[]; requiresConfirmation: boolean; warnings: string[] };
+export type CandidateConfidence = { title: number | null; subject: number | null; startDate: number | null; dueDate: number | null; dueTime: number | null };
+export type Candidate = {
+  assignmentId?: string;
+  sourceOrder: number;
+  title: string | null;
+  subject: string | null;
+  startDate: string | null;
+  dueDate: string | null;
+  dueTime: string | null;
+  dueAt?: string | null;
+  sourceText: string | null;
+  confidence: CandidateConfidence | null;
+  needsReview: boolean | string[];
+  warnings: string[];
+  possibleDuplicateOf: string | null;
+};
+export type ExtractionImage = { imageId: string; imageIndex: number; status: "COMPLETED" | "NO_ASSIGNMENTS" | "FAILED"; assignments: Candidate[]; errorMessage: string | null };
+export type Extraction = {
+  extractionBatchId: string;
+  referenceDate: string;
+  timezone: string;
+  images: ExtractionImage[];
+  summary: { totalImages: number; completedImages: number; failedImages: number; totalAssignments: number };
+  // Legacy response fields are accepted so an older API can be upgraded without breaking review state.
+  candidates?: Candidate[];
+  requiresConfirmation?: boolean;
+  warnings?: string[];
+};
 type ApiError = { status?: number; code?: string; message?: string; details?: Record<string, string> };
-type AssignmentPayload = { title: string; subject: string; dueAt: string; notificationsEnabled: boolean };
+type AssignmentPayload = { title: string; subject: string; dueAt: string; notificationsEnabled: boolean; startDate?: string | null };
 type PendingOperation =
   | { key: string; type: "create"; assignmentId: string; payload: AssignmentPayload }
   | { key: string; type: "update"; assignmentId: string; payload: AssignmentPayload }
@@ -184,7 +212,7 @@ function queueOperation(operation: PendingOperation) {
 }
 
 function optimisticAssignment(id: string, payload: AssignmentPayload, completed = false): Assignment {
-  return { id, ...payload, completed, completedAt: completed ? new Date().toISOString() : null, dayOffset: 0, deadlineLabel: "" };
+  return { id, ...payload, startDate: payload.startDate || null, completed, completedAt: completed ? new Date().toISOString() : null, dayOffset: 0, deadlineLabel: "" };
 }
 
 type RefreshResult = "refreshed" | "invalid" | "unavailable";
@@ -404,8 +432,8 @@ export async function completeAssignment(id: string, completed: boolean) {
   return assignment;
 }
 
-export async function createAssignment(title: string, subject: string, dueAt: string, notificationsEnabled = true) {
-  const payload = { title, subject, dueAt, notificationsEnabled };
+export async function createAssignment(title: string, subject: string, dueAt: string, notificationsEnabled = true, startDate: string | null = null) {
+  const payload: AssignmentPayload = { title, subject, dueAt, notificationsEnabled, startDate };
   if (onlineNow()) {
     try {
       const assignment = await request<Assignment>("/assignments", { method: "POST", body: JSON.stringify(payload) });
@@ -419,6 +447,39 @@ export async function createAssignment(title: string, subject: string, dueAt: st
   upsertAssignment(assignment);
   queueOperation({ key: localId(), type: "create", assignmentId: assignment.id, payload });
   return assignment;
+}
+
+export type BatchAssignmentPayload = {
+  clientAssignmentId: string;
+  sourceImageId: string | null;
+  title: string;
+  subject: string;
+  startDate: string | null;
+  dueDate: string;
+  dueTime: string | null;
+  reminderEnabled: boolean;
+};
+
+export async function createAssignmentsBatch(extractionBatchId: string, assignments: BatchAssignmentPayload[]) {
+  if (!assignments.length) throw new RecordsApiError("저장할 과제를 선택해 주세요.");
+  if (onlineNow()) {
+    return request<Assignment[]>("/assignments/batch", {
+      method: "POST",
+      headers: { "Idempotency-Key": extractionBatchId },
+      body: JSON.stringify({ extractionBatchId, assignments }),
+    }).then((created) => {
+      created.forEach(upsertAssignment);
+      return created;
+    });
+  }
+  // Offline changes stay in the existing queue and are replayed when connectivity returns.
+  return Promise.all(assignments.map((item) => createAssignment(
+    item.title,
+    item.subject,
+    `${item.dueDate}T${item.dueTime || "23:59"}:00+09:00`,
+    item.reminderEnabled,
+    item.startDate,
+  )));
 }
 
 export async function updateAssignment(id: string, title: string, subject: string, dueAt: string, notificationsEnabled = true) {
@@ -554,11 +615,15 @@ export async function registerPushSubscription(subscription: { endpoint: string;
   });
 }
 
-export function extractAssignment(image: File) {
+export function extractAssignment(image: File, metadata?: { extractionBatchId?: string; imageId?: string; imageIndex?: number }) {
   if (!onlineNow()) return Promise.reject(new RecordsApiError("오프라인에서는 사진 분석을 사용할 수 없습니다. 직접 과제를 입력해 주세요."));
   const body = new FormData();
   body.append("image", image);
-  return request<Extraction>("/assignment-extractions", { method: "POST", body, signal: AbortSignal.timeout(60000) });
+  const headers = new Headers();
+  if (metadata?.extractionBatchId) headers.set("X-Extraction-Batch-Id", metadata.extractionBatchId);
+  if (metadata?.imageId) headers.set("X-Client-Image-Id", metadata.imageId);
+  if (metadata?.imageIndex !== undefined) headers.set("X-Image-Index", String(metadata.imageIndex));
+  return request<Extraction>("/assignment-extractions", { method: "POST", headers, body, signal: AbortSignal.timeout(60000) });
 }
 
 let syncInFlight: Promise<void> | null = null;
