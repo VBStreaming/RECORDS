@@ -713,6 +713,11 @@ test("my page updates profile and the edit sheet deletes an assignment", async (
   await page.getByRole("button", { name: "마이페이지", exact: true }).click();
   const myPage = page.getByRole("dialog", { name: "마이페이지" });
   await expect(myPage.getByRole("button", { name: "로그아웃", exact: true })).toBeVisible();
+  await myPage.getByRole("button", { name: "로그아웃", exact: true }).click();
+  const logoutDialog = page.getByRole("dialog", { name: "로그아웃 확인" });
+  await expect(logoutDialog).toBeVisible();
+  await logoutDialog.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(myPage).toBeVisible();
   await myPage.getByRole("textbox", { name: "이름" }).fill("수정학생");
   await myPage.getByRole("textbox", { name: "학번" }).fill("20515");
   await myPage.getByRole("button", { name: "정보 저장" }).click();

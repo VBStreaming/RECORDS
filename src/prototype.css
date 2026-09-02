@@ -2002,6 +2002,36 @@ button {
   height: 15px;
 }
 
+.logout-confirm-message {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.logout-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.logout-confirm-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 46px;
+  border: 0;
+  border-radius: 13px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  font-weight: 800;
+}
+
+.logout-confirm-actions button:last-child {
+  color: var(--selected-ink);
+  background: var(--accent);
+}
+
 .mypage-danger button,
 .assignment-delete-button {
   border: 0;

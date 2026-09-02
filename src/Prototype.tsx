@@ -876,6 +876,16 @@ function DeleteAccountModal({ onClose, onDeleted }: { onClose: () => void; onDel
   );
 }
 
+function LogoutConfirmModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+  return (
+    <TabletModal label="로그아웃 확인">
+      <header><div><p className="section-label">계정</p><h2>로그아웃할까요?</h2></div><button onClick={onClose} aria-label="닫기"><Cross2Icon /></button></header>
+      <p className="logout-confirm-message">현재 기기에서 Kyelendar 계정을 로그아웃합니다.</p>
+      <div className="logout-confirm-actions"><button type="button" onClick={onClose}>취소</button><button type="button" onClick={onConfirm}><ExitIcon />로그아웃</button></div>
+    </TabletModal>
+  );
+}
+
 function AuthField({ icon, label, ...props }: InputHTMLAttributes<HTMLInputElement> & { icon: ReactNode; label: string }) {
   return (
     <label className="auth-field">
@@ -1328,6 +1338,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
   const [myPageOpen, setMyPageOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
@@ -1482,7 +1493,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         <main className="records" aria-label="과제 디데이 대시보드">
           <header className="topbar">
             <div><p className="eyebrow">과제 플래너</p><Brand /></div>
-            <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={() => setMyPageOpen(true)} aria-label="마이페이지"><PersonIcon /></button><button className="icon-button" onClick={onLogout} aria-label="로그아웃"><ExitIcon /></button></div>
+            <div className="topbar-actions"><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button><button className="icon-button" onClick={() => setMyPageOpen(true)} aria-label="마이페이지"><PersonIcon /></button></div>
           </header>
           <OfflineBadge online={online} />
           <section className="deadline-card" aria-label="가장 가까운 마감">
@@ -1496,10 +1507,11 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         </main>
       </MobileScroll>
       <AnimatePresence>
-        {myPageOpen && profile ? <MyPageSheet key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} onLogout={onLogout} /> : null}
+        {myPageOpen && profile ? <MyPageSheet key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} onLogout={() => setLogoutConfirmOpen(true)} /> : null}
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
+        {logoutConfirmOpen ? <LogoutConfirmModal key="logout-confirm" onClose={() => setLogoutConfirmOpen(false)} onConfirm={onLogout} /> : null}
       </AnimatePresence>
-      {portalReady && screenRef.current && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? createPortal(
+      {portalReady && screenRef.current && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen && !logoutConfirmOpen ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
           <button className="photo-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }}><PlusIcon /> 과제 추가</button>
         </nav>, screenRef.current,
@@ -1667,6 +1679,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
   const [myPageOpen, setMyPageOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [title, setTitle] = useState("");
@@ -1823,7 +1836,6 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         </nav>
         <div className="student-card"><span>{profile?.studentNumber || "-"}</span><strong>{profile?.name || "사용자"}</strong><small>{profile?.email || "-"}</small></div>
         <button className="tablet-account" onClick={() => setMyPageOpen(true)}><PersonIcon />마이페이지</button>
-        <button className="tablet-logout" onClick={onLogout}><ExitIcon />로그아웃</button>
       </aside>
       <section className="tablet-content">
         <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button>{!editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? <button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><PlusIcon />과제 추가</button> : null}</div></header>
@@ -1843,8 +1855,9 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         )}
       </section>
       <AnimatePresence>
-        {myPageOpen && profile ? <MyPageModal key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} onLogout={onLogout} /> : null}
+        {myPageOpen && profile ? <MyPageModal key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} onLogout={() => setLogoutConfirmOpen(true)} /> : null}
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
+        {logoutConfirmOpen ? <LogoutConfirmModal key="logout-confirm" onClose={() => setLogoutConfirmOpen(false)} onConfirm={onLogout} /> : null}
         {addOpen ? (
           <TabletModal key="add-assignment" label="새 과제 추가">
             <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
