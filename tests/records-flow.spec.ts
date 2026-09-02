@@ -5,6 +5,7 @@ async function chooseAssignmentPhoto(page: Page) {
   await page.getByRole("button", { name: "과제 추가", exact: true }).click();
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "칠판 또는 유인물 사진 선택" }).click();
+  await page.getByRole("button", { name: "갤러리 선택" }).click();
   await (await chooser).setFiles({
     name: "assignment.png",
     mimeType: "image/png",

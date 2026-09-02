@@ -798,6 +798,12 @@ button {
   font-size: 10px;
 }
 
+.photo-field.source-open {
+  height: auto;
+  min-height: 86px;
+  padding-bottom: 10px;
+}
+
 .photo-field svg {
   display: block;
   flex: 0 0 21px;
@@ -820,6 +826,34 @@ button {
   color: inherit;
   background: transparent;
   font: inherit;
+}
+
+.photo-source-options {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px 0;
+  box-sizing: border-box;
+}
+
+.photo-source-options button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.photo-source-options svg {
+  width: 15px;
+  height: 15px;
 }
 
 .photo-field input {

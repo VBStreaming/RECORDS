@@ -1225,10 +1225,17 @@ function TaskList({ tasks, selectedDate, onToggle, onEdit }: { tasks: Task[]; se
   );
 }
 
-function PhotoPicker({ file, onRequestSelect }: { file: File | null; onRequestSelect: () => void }) {
+function PhotoPicker({ file, onRequestSelect, onRequestCamera }: { file: File | null; onRequestSelect: () => void; onRequestCamera: () => void }) {
+  const [sourceOpen, setSourceOpen] = useState(false);
   return (
-    <div className="photo-field">
-      <button type="button" className="photo-picker-trigger" onClick={onRequestSelect}><ImageIcon /><span>{file?.name || "칠판 또는 유인물 사진 선택"}</span></button>
+    <div className={`photo-field ${sourceOpen ? "source-open" : ""}`}>
+      <button type="button" className="photo-picker-trigger" onClick={() => setSourceOpen((open) => !open)} aria-expanded={sourceOpen}>
+        <ImageIcon /><span>{file?.name || "칠판 또는 유인물 사진 선택"}</span>
+      </button>
+      {sourceOpen ? <div className="photo-source-options" role="group" aria-label="사진 가져오기 방법">
+        <button type="button" onClick={onRequestCamera}><CameraIcon />카메라 촬영</button>
+        <button type="button" onClick={onRequestSelect}><ImageIcon />갤러리 선택</button>
+      </div> : null}
     </div>
   );
 }
@@ -1297,6 +1304,13 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const openPhotoInput = (capture: boolean) => {
+    const input = photoInputRef.current;
+    if (!input) return;
+    if (capture) input.setAttribute("capture", "environment");
+    else input.removeAttribute("capture");
+    input.click();
+  };
   const calendar = useCalendar(tasks);
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
@@ -1463,7 +1477,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       }} />
       <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen} title="새 과제 추가" description="사진 한 장과 필수 정보만 빠르게 기록해요." snap={0.86}>
         <div className="add-form">
-          <PhotoPicker file={file} onRequestSelect={() => photoInputRef.current?.click()} />
+          <PhotoPicker file={file} onRequestSelect={() => openPhotoInput(false)} onRequestCamera={() => openPhotoInput(true)} />
           {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
           <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
@@ -1628,6 +1642,13 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const openPhotoInput = (capture: boolean) => {
+    const input = photoInputRef.current;
+    if (!input) return;
+    if (capture) input.setAttribute("capture", "environment");
+    else input.removeAttribute("capture");
+    input.click();
+  };
   const calendar = useCalendar(tasks);
   const activeCount = tasks.filter((task) => !task.done).length;
   const progress = taskProgress(tasks);
@@ -1787,7 +1808,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         {addOpen ? (
           <TabletModal key="add-assignment" label="새 과제 추가">
             <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
-            <PhotoPicker file={file} onRequestSelect={() => photoInputRef.current?.click()} />
+            <PhotoPicker file={file} onRequestSelect={() => openPhotoInput(false)} onRequestCamera={() => openPhotoInput(true)} />
             {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
             <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
