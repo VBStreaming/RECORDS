@@ -223,10 +223,10 @@ function drawCalendarCard(
   ctx.stroke();
 
   ctx.fillStyle = palette.muted;
-  ctx.font = "700 18px Roboto, system-ui, sans-serif";
+  ctx.font = '700 18px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
   ctx.fillText("월간", x + 34, y + 48);
   ctx.fillStyle = palette.ink;
-  ctx.font = "900 36px Roboto, system-ui, sans-serif";
+  ctx.font = '900 36px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
   ctx.fillText(`${calendar.year}. ${String(calendar.month + 1).padStart(2, "0")}`, x + 34, y + 92);
 
   const gridX = x + 28;
@@ -237,7 +237,7 @@ function drawCalendarCard(
   const gridHeight = landscape ? 300 : 430;
   const rowHeight = (gridHeight - 42) / rows;
   ctx.fillStyle = palette.muted;
-  ctx.font = "700 16px Roboto, system-ui, sans-serif";
+  ctx.font = '700 16px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
   weekdays.forEach((weekday, index) => {
     ctx.textAlign = "center";
     ctx.fillText(weekday, gridX + columnWidth * index + columnWidth / 2, gridY - 22);
@@ -261,7 +261,7 @@ function drawCalendarCard(
       ctx.fill();
     }
     ctx.fillStyle = selected || isToday ? palette.selectedInk : palette.ink;
-    ctx.font = `${selected ? "900" : "500"} 19px Roboto, system-ui, sans-serif`;
+    ctx.font = `${selected ? "900" : "500"} 19px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif`;
     ctx.fillText(String(day), centerX, dateY);
     dateTasks.slice(0, 3).forEach((task, taskIndex) => {
       ctx.fillStyle = task.done ? palette.muted : task.color;
@@ -271,7 +271,7 @@ function drawCalendarCard(
     });
     if (dateTasks.length > 3) {
       ctx.fillStyle = palette.muted;
-      ctx.font = "500 10px Roboto, system-ui, sans-serif";
+      ctx.font = '500 10px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
       ctx.fillText(`+${dateTasks.length - 3}`, centerX, cellTop + 76);
     }
   });
@@ -287,7 +287,7 @@ function drawCalendarCard(
   ctx.fillStyle = palette.line;
   ctx.fillRect(x + 28, agendaTop - 22, width - 56, 2);
   ctx.fillStyle = palette.muted;
-  ctx.font = "700 15px Roboto, system-ui, sans-serif";
+    ctx.font = '700 15px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
   ctx.fillText("예정된 과제", x + 28, agendaTop + 14);
 
   const groupHeight = landscape ? 72 : 92;
@@ -297,10 +297,10 @@ function drawCalendarCard(
     const day = Number(date.slice(8));
     const weekday = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "short" }).format(new Date(`${date}T00:00:00+09:00`));
     ctx.fillStyle = palette.ink;
-    ctx.font = "900 22px Roboto, system-ui, sans-serif";
+    ctx.font = '900 22px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
     ctx.fillText(String(day), x + 30, groupY + 18);
     ctx.fillStyle = palette.muted;
-    ctx.font = "500 11px Roboto, system-ui, sans-serif";
+    ctx.font = '500 11px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
     ctx.fillText(`${calendar.month + 1}월 ${day}일 ${weekday}`, x + 30, groupY + 38);
 
     dateTasks.slice(0, landscape ? 1 : 2).forEach((task, taskIndex) => {
@@ -311,10 +311,10 @@ function drawCalendarCard(
       ctx.arc(taskX, taskY - 5, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = task.done ? palette.muted : palette.ink;
-      ctx.font = "700 13px Roboto, system-ui, sans-serif";
+      ctx.font = '700 13px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
       canvasText(ctx, task.subject, taskX + 14, taskY, landscape ? 110 : 120);
       ctx.fillStyle = palette.muted;
-      ctx.font = "500 12px Roboto, system-ui, sans-serif";
+      ctx.font = '500 12px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
       canvasText(ctx, task.title, taskX + (landscape ? 132 : 142), taskY, width - (taskX - x) - 230);
       ctx.textAlign = "right";
       ctx.fillText(task.time, x + width - 30, taskY);
@@ -322,7 +322,7 @@ function drawCalendarCard(
     });
     if (dateTasks.length > (landscape ? 1 : 2)) {
       ctx.fillStyle = palette.muted;
-      ctx.font = "500 10px Roboto, system-ui, sans-serif";
+      ctx.font = '500 10px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
       ctx.fillText(`+${dateTasks.length - (landscape ? 1 : 2)}개 더 있음`, x + (landscape ? 175 : 170), groupY + groupHeight - 8);
     }
     ctx.fillStyle = palette.line;
@@ -330,11 +330,11 @@ function drawCalendarCard(
   });
   if (!groups.length) {
     ctx.fillStyle = palette.muted;
-    ctx.font = "500 13px Roboto, system-ui, sans-serif";
+    ctx.font = '500 13px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
     ctx.fillText("이번 달에 등록된 과제가 없습니다.", x + 28, agendaTop + 54);
   } else if (visibleGroups.length < groups.length) {
     ctx.fillStyle = palette.muted;
-    ctx.font = "500 11px Roboto, system-ui, sans-serif";
+    ctx.font = '500 11px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
     ctx.fillText(`+${groups.length - visibleGroups.length}일의 일정이 더 있습니다.`, x + 28, y + height - 18);
   }
   ctx.textAlign = "left";
@@ -364,10 +364,10 @@ async function downloadCalendarImage(
   ctx.fillRect(0, 0, designWidth, designHeight);
 
   ctx.fillStyle = palette.muted;
-  ctx.font = "700 16px Roboto, system-ui, sans-serif";
+  ctx.font = '700 16px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
   ctx.fillText("과제 플래너", 56, 58);
   ctx.fillStyle = palette.ink;
-  ctx.font = "900 42px Roboto, system-ui, sans-serif";
+  ctx.font = '900 42px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
   ctx.fillText("RECORDS.", 56, 108);
 
   const cardX = landscape ? 56 : 48;

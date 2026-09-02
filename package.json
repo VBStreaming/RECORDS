@@ -14,6 +14,7 @@
     "build": "tsc && vite build && node scripts/prepare-sites-build.mjs"
   },
   "dependencies": {
+    "@fontsource/noto-sans-kr": "^5.3.0",
     "@fontsource/roboto": "5.2.10",
     "@radix-ui/react-dialog": "1.1.19",
     "@radix-ui/react-dropdown-menu": "2.1.20",
