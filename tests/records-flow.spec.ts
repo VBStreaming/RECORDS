@@ -373,8 +373,15 @@ test("photo analysis requires an explicit action and supports candidate review",
   await page.getByRole("button", { name: "사진 분석" }).click();
   await expect.poll(() => extractionRequests).toBe(1);
   await expect(page.getByRole("button", { name: "1. 첫 후보" })).toBeVisible();
+  await expect(page.getByText("주황색 입력값을 직접 확인해 주세요.", { exact: true })).toBeVisible();
+  await expect(page.locator(".review-needed")).toHaveCount(3);
   await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("");
   await expect(page.getByRole("button", { name: "과제 저장" })).toBeDisabled();
+  await page.getByRole("textbox", { name: "과제명" }).fill("확인한 과제");
+  await page.getByRole("textbox", { name: "과목" }).fill("확인한 과목");
+  await page.getByRole("textbox", { name: "마감일" }).fill("2030-09-09");
+  await expect(page.getByText("주황색 입력값을 직접 확인해 주세요.", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".review-needed")).toHaveCount(0);
   await page.getByRole("button", { name: "2. 두 번째 후보" }).click();
   await expect(page.getByRole("textbox", { name: "과제명" })).toHaveValue("두 번째 후보");
   await expect(page.getByRole("textbox", { name: "과목" })).toHaveValue("직접 입력 과목");

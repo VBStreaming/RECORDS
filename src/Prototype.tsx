@@ -1240,12 +1240,37 @@ function PhotoPicker({ file, onRequestSelect, onRequestCamera }: { file: File | 
   );
 }
 
-function AnalysisReview({ candidates, selected, warnings, onSelect }: { candidates: Candidate[]; selected: number; warnings: string[]; onSelect: (candidate: Candidate, index: number) => void }) {
+type ReviewField = "title" | "subject" | "dueDate" | "dueTime";
+type ReviewedFields = Record<string, ReviewField[]>;
+
+function candidateReviewKey(candidate: Candidate, index: number) {
+  return candidate.assignmentId || `candidate-${index}`;
+}
+
+function candidateReviewFields(candidate: Candidate): ReviewField[] {
+  const fields = new Set<ReviewField>();
+  if (candidate.needsReview === true) ["title", "subject", "dueDate"].forEach((field) => fields.add(field as ReviewField));
+  if (Array.isArray(candidate.needsReview)) {
+    candidate.needsReview.forEach((field) => {
+      if (field === "title" || field === "subject" || field === "dueDate" || field === "dueAt" || field === "dueTime") {
+        fields.add(field === "dueAt" ? "dueDate" : field);
+      }
+    });
+  }
+  if (!candidate.title?.trim()) fields.add("title");
+  if (!candidate.subject?.trim()) fields.add("subject");
+  if (!candidate.dueDate && !candidate.dueAt) fields.add("dueDate");
+  return [...fields];
+}
+
+function unreviewedCandidateFields(candidate: Candidate | undefined, index: number, reviewedFields: ReviewedFields) {
+  if (!candidate) return [];
+  const reviewed = reviewedFields[candidateReviewKey(candidate, index)] || [];
+  return candidateReviewFields(candidate).filter((field) => !reviewed.includes(field));
+}
+
+function AnalysisReview({ candidates, selected, warnings, reviewRequired, onSelect }: { candidates: Candidate[]; selected: number; warnings: string[]; reviewRequired: boolean; onSelect: (candidate: Candidate, index: number) => void }) {
   if (!candidates.length && !warnings.length) return null;
-  const selectedCandidate = candidates[selected];
-  const selectedNeedsReview = Array.isArray(selectedCandidate?.needsReview)
-    ? selectedCandidate.needsReview.length > 0
-    : Boolean(selectedCandidate?.needsReview);
   return (
     <div className="analysis-review" role="status">
       {candidates.length > 1 ? (
@@ -1255,9 +1280,9 @@ function AnalysisReview({ candidates, selected, warnings, onSelect }: { candidat
               {index + 1}. {candidate.title || "제목 확인 필요"}
             </button>
           ))}
-        </div>
-      ) : null}
-      {selectedNeedsReview ? <p>주황색 입력값을 직접 확인해 주세요.</p> : null}
+          </div>
+        ) : null}
+      {reviewRequired ? <p>주황색 입력값을 직접 확인해 주세요.</p> : null}
       {warnings.map((warning) => <p key={warning}>{warning}</p>)}
     </div>
   );
@@ -1364,6 +1389,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState(0);
+  const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
   const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1425,6 +1451,12 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     if (extractedDueAt) setDueTime(extractedDueAt.time);
   };
 
+  const markFieldReviewed = (field: ReviewField, value: string) => {
+    if (!value.trim() || !candidates[selectedCandidate]) return;
+    const key = candidateReviewKey(candidates[selectedCandidate], selectedCandidate);
+    setReviewedFields((current) => current[key]?.includes(field) ? current : { ...current, [key]: [...(current[key] || []), field] });
+  };
+
   const analyzePhoto = async (selectedFile: File) => {
     setBusy(true);
     setError("");
@@ -1434,6 +1466,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       const candidate = extractedCandidates[0];
       if (!candidate) throw new Error("사진에서 과제를 찾지 못했습니다.");
       setCandidates(extractedCandidates);
+      setReviewedFields({});
       setAnalysisWarnings(extraction.warnings || []);
       applyCandidate(candidate, 0);
     } catch (analysisError) {
@@ -1539,6 +1572,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         if (!selectedFile) return;
         setFile(selectedFile);
         setCandidates([]);
+        setReviewedFields({});
         setAnalysisWarnings([]);
         setDueDate(calendar.selectedDate);
         setSheetOpen(true);
@@ -1547,14 +1581,14 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         <div className="add-form">
           <PhotoPicker file={file} onRequestSelect={() => openPhotoInput(false)} onRequestCamera={() => openPhotoInput(true)} />
           {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
-          <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
+          <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} reviewRequired={unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).length > 0} onSelect={applyCandidate} />
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
-          <label className={`form-field ${candidates[selectedCandidate] && (Array.isArray(candidates[selectedCandidate].needsReview) ? candidates[selectedCandidate].needsReview.includes("title") : candidates[selectedCandidate].needsReview) ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="과제명을 입력하세요" /></label>
+          <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => { setTitle(event.target.value); markFieldReviewed("title", event.target.value); }} placeholder="과제명을 입력하세요" /></label>
           <div className="form-row">
-            <label className={`form-field ${candidates[selectedCandidate] && (Array.isArray(candidates[selectedCandidate].needsReview) ? candidates[selectedCandidate].needsReview.includes("subject") : candidates[selectedCandidate].needsReview) ? "review-needed" : ""}`}><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
-            <label className={`form-field ${candidates[selectedCandidate] && (Array.isArray(candidates[selectedCandidate].needsReview) ? candidates[selectedCandidate].needsReview.includes("dueAt") || candidates[selectedCandidate].needsReview.includes("dueDate") : candidates[selectedCandidate].needsReview) ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+            <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("subject") ? "review-needed" : ""}`}><span>과목</span><input value={subject} onChange={(event) => { setSubject(event.target.value); markFieldReviewed("subject", event.target.value); }} placeholder="과목 또는 분류를 입력하세요" /></label>
+            <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("dueDate") ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={dueDate} onChange={(event) => { setDueDate(event.target.value); markFieldReviewed("dueDate", event.target.value); }} /></label>
           </div>
-          <label className="form-field"><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => setDueTime(event.target.value)} /></label>
+          <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("dueTime") ? "review-needed" : ""}`}><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => { setDueTime(event.target.value); markFieldReviewed("dueTime", event.target.value); }} /></label>
           <label className="alarm-toggle"><input type="checkbox" checked={notificationsEnabled} onChange={(event) => setNotificationsEnabled(event.target.checked)} /><BellIcon />마감 알림 받기</label>
           <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || !dueDate || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
           <button className="sheet-close" onClick={() => setSheetOpen(false)} aria-label="닫기"><Cross2Icon /></button>
@@ -1706,6 +1740,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState(0);
+  const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
   const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1757,6 +1792,12 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     if (extractedDueAt) setDueTime(extractedDueAt.time);
   };
 
+  const markFieldReviewed = (field: ReviewField, value: string) => {
+    if (!value.trim() || !candidates[selectedCandidate]) return;
+    const key = candidateReviewKey(candidates[selectedCandidate], selectedCandidate);
+    setReviewedFields((current) => current[key]?.includes(field) ? current : { ...current, [key]: [...(current[key] || []), field] });
+  };
+
   const analyzePhoto = async (selectedFile: File) => {
     setBusy(true);
     setError("");
@@ -1766,6 +1807,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
       const candidate = extractedCandidates[0];
       if (!candidate) throw new Error("사진에서 과제를 찾지 못했습니다.");
       setCandidates(extractedCandidates);
+      setReviewedFields({});
       setAnalysisWarnings(extraction.warnings || []);
       applyCandidate(candidate, 0);
     } catch (analysisError) {
@@ -1868,6 +1910,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         if (!selectedFile) return;
         setFile(selectedFile);
         setCandidates([]);
+        setReviewedFields({});
         setAnalysisWarnings([]);
         setDueDate(calendar.selectedDate);
         setAddOpen(true);
@@ -1881,14 +1924,14 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
             <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
             <PhotoPicker file={file} onRequestSelect={() => openPhotoInput(false)} onRequestCamera={() => openPhotoInput(true)} />
             {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
-            <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} onSelect={applyCandidate} />
+            <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} reviewRequired={unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).length > 0} onSelect={applyCandidate} />
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
-            <label className={`form-field ${candidates[selectedCandidate] && (Array.isArray(candidates[selectedCandidate].needsReview) ? candidates[selectedCandidate].needsReview.includes("title") : candidates[selectedCandidate].needsReview) ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="과제명을 입력하세요" /></label>
+            <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => { setTitle(event.target.value); markFieldReviewed("title", event.target.value); }} placeholder="과제명을 입력하세요" /></label>
             <div className="form-row">
-              <label className={`form-field ${candidates[selectedCandidate] && (Array.isArray(candidates[selectedCandidate].needsReview) ? candidates[selectedCandidate].needsReview.includes("subject") : candidates[selectedCandidate].needsReview) ? "review-needed" : ""}`}><span>과목</span><input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
-              <label className={`form-field ${candidates[selectedCandidate] && (Array.isArray(candidates[selectedCandidate].needsReview) ? candidates[selectedCandidate].needsReview.includes("dueAt") || candidates[selectedCandidate].needsReview.includes("dueDate") : candidates[selectedCandidate].needsReview) ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+              <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("subject") ? "review-needed" : ""}`}><span>과목</span><input value={subject} onChange={(event) => { setSubject(event.target.value); markFieldReviewed("subject", event.target.value); }} placeholder="과목 또는 분류를 입력하세요" /></label>
+              <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("dueDate") ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={dueDate} onChange={(event) => { setDueDate(event.target.value); markFieldReviewed("dueDate", event.target.value); }} /></label>
             </div>
-            <label className="form-field"><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => setDueTime(event.target.value)} /></label>
+            <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("dueTime") ? "review-needed" : ""}`}><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => { setDueTime(event.target.value); markFieldReviewed("dueTime", event.target.value); }} /></label>
             <label className="alarm-toggle"><input type="checkbox" checked={notificationsEnabled} onChange={(event) => setNotificationsEnabled(event.target.checked)} /><BellIcon />마감 알림 받기</label>
             <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || !dueDate || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
           </TabletModal>
