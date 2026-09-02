@@ -1961,6 +1961,47 @@ button {
   border-radius: 18px;
 }
 
+.mypage-logout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.mypage-logout h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.mypage-logout p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mypage-logout button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 82px;
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  font-weight: 800;
+}
+
+.mypage-logout button svg {
+  width: 15px;
+  height: 15px;
+}
+
 .mypage-danger button,
 .assignment-delete-button {
   border: 0;
@@ -2173,6 +2214,11 @@ button {
   }
 
   .mypage-danger {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mypage-logout {
     align-items: stretch;
     flex-direction: column;
   }
