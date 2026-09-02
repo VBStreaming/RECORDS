@@ -348,6 +348,27 @@ test("photo analysis requires an explicit action and supports candidate review",
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
       return;
     }
+    if (url.pathname === "/assignments" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { title: string; subject: string; dueAt: string; notificationsEnabled?: boolean };
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: {
+          id: `saved-${payload.title}`,
+          title: payload.title,
+          subject: payload.subject,
+          dueAt: payload.dueAt,
+          dueTime: payload.dueAt.slice(11, 16),
+          notificationsEnabled: payload.notificationsEnabled ?? true,
+          completed: false,
+          completedAt: null,
+          dayOffset: 1,
+          deadlineLabel: "D-1",
+          startDate: null,
+        } }),
+      });
+      return;
+    }
     if (url.pathname === "/assignments" && request.method() === "GET") {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [] }) });
       return;
@@ -396,6 +417,13 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.getByRole("textbox", { name: "과제명" })).toHaveValue("두 번째 후보");
   await expect(page.getByRole("textbox", { name: "과목" })).toHaveValue("직접 입력 과목");
   await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("2030-09-10");
+  await page.getByRole("button", { name: "과제 저장" }).click();
+  await expect(page.getByRole("heading", { name: "새 과제 추가" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "2. 두 번째 후보" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "1. 첫 후보" })).toBeVisible();
+  await page.getByRole("button", { name: "1번 후보 삭제" }).click();
+  await expect(page.locator(".candidate-list")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "새 과제 추가" })).toBeVisible();
 
   await page.setViewportSize({ width: 844, height: 390 });
   await expect(page.locator(".flow-stack")).toBeVisible();
