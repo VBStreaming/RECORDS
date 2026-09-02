@@ -704,9 +704,8 @@ function TabletModal({ label, className = "", children }: { label: string; class
   );
 }
 
-function MyPageModal({ profile, onClose, onProfileUpdated, onPasswordChanged, onDeleteAccount }: {
+function MyPageContent({ profile, onProfileUpdated, onPasswordChanged, onDeleteAccount }: {
   profile: User;
-  onClose: () => void;
   onProfileUpdated: (user: User) => void;
   onPasswordChanged: () => void;
   onDeleteAccount: () => void;
@@ -747,8 +746,7 @@ function MyPageModal({ profile, onClose, onProfileUpdated, onPasswordChanged, on
   };
 
   return (
-    <TabletModal label="마이페이지" className="mypage-modal">
-      <header><div><p className="section-label">계정 설정</p><h2>마이페이지</h2></div><button onClick={onClose} aria-label="닫기"><Cross2Icon /></button></header>
+    <>
       <div className="mypage-summary"><span>{profile.name.slice(0, 1)}</span><div><strong>{profile.name}</strong><small>{profile.email}</small></div></div>
       {message ? <p className="mypage-success" role="status">{message}</p> : null}
       {error ? <p className="auth-error" role="alert">{error}</p> : null}
@@ -771,7 +769,38 @@ function MyPageModal({ profile, onClose, onProfileUpdated, onPasswordChanged, on
         </form>
       </section>
       <section className="mypage-danger"><div><h3>회원탈퇴</h3><p>계정과 모든 과제 및 알림이 영구적으로 삭제됩니다.</p></div><button type="button" onClick={onDeleteAccount}>회원탈퇴</button></section>
+    </>
+  );
+}
+
+function MyPageModal({ profile, onClose, onProfileUpdated, onPasswordChanged, onDeleteAccount }: {
+  profile: User;
+  onClose: () => void;
+  onProfileUpdated: (user: User) => void;
+  onPasswordChanged: () => void;
+  onDeleteAccount: () => void;
+}) {
+  return (
+    <TabletModal label="마이페이지" className="mypage-modal">
+      <header><div><p className="section-label">계정 설정</p><h2>마이페이지</h2></div><button onClick={onClose} aria-label="닫기"><Cross2Icon /></button></header>
+      <MyPageContent profile={profile} onProfileUpdated={onProfileUpdated} onPasswordChanged={onPasswordChanged} onDeleteAccount={onDeleteAccount} />
     </TabletModal>
+  );
+}
+
+function MyPageSheet({ profile, onClose, onProfileUpdated, onPasswordChanged, onDeleteAccount }: {
+  profile: User;
+  onClose: () => void;
+  onProfileUpdated: (user: User) => void;
+  onPasswordChanged: () => void;
+  onDeleteAccount: () => void;
+}) {
+  return (
+    <BottomSheet open onOpenChange={(open) => { if (!open) onClose(); }} title="마이페이지" description="개인 정보와 계정을 관리하세요." snap={0.9}>
+      <div className="mypage-sheet-content">
+        <MyPageContent profile={profile} onProfileUpdated={onProfileUpdated} onPasswordChanged={onPasswordChanged} onDeleteAccount={onDeleteAccount} />
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -1369,7 +1398,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
         </main>
       </MobileScroll>
       <AnimatePresence>
-        {myPageOpen && profile ? <MyPageModal key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} /> : null}
+        {myPageOpen && profile ? <MyPageSheet key="my-page" profile={profile} onClose={() => setMyPageOpen(false)} onProfileUpdated={setProfile} onPasswordChanged={onLogout} onDeleteAccount={() => { setMyPageOpen(false); setDeleteAccountOpen(true); }} /> : null}
         {deleteAccountOpen ? <DeleteAccountModal key="delete-account" onClose={() => setDeleteAccountOpen(false)} onDeleted={onLogout} /> : null}
       </AnimatePresence>
       {portalReady && screenRef.current && !sheetOpen && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? createPortal(

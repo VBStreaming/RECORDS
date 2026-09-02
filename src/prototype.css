@@ -1822,25 +1822,14 @@ button {
   opacity: .45;
 }
 
-.mypage-modal {
-  position: relative;
-  width: min(920px, calc(100vw - 64px));
-  max-height: min(88vh, 820px);
-  overflow-y: auto;
-  border-radius: 24px 24px 0 0;
-  padding: 30px 34px 34px;
+.mypage-sheet-content {
+  display: grid;
+  gap: 14px;
 }
 
-.mypage-modal::before {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  width: 58px;
-  height: 7px;
-  border-radius: 999px;
-  background: #5b6064;
-  content: "";
-  transform: translateX(-50%);
+.mypage-modal {
+  max-height: min(88vh, 820px);
+  overflow-y: auto;
 }
 
 .mypage-summary {
@@ -2116,11 +2105,7 @@ button {
   }
 
   .mypage-modal {
-    align-self: end;
-    width: 100%;
     max-height: calc(100dvh - 32px);
-    padding: 30px 20px 24px;
-    border-radius: 22px 22px 0 0;
   }
 
   .mypage-danger {
