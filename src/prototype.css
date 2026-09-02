@@ -1885,29 +1885,6 @@ button {
   gap: 14px;
 }
 
-.mypage-expandable-sheet {
-  height: auto;
-  overflow: hidden;
-  touch-action: pan-y;
-  transition: height 220ms ease;
-}
-
-.mypage-expandable-sheet .sheet-content {
-  min-height: 0;
-  overflow: hidden;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-}
-
-.mypage-expandable-sheet.mypage-sheet-expanded .sheet-content {
-  overflow-y: auto;
-  touch-action: pan-y;
-}
-
-.mypage-expandable-sheet:not(.mypage-sheet-expanded) .sheet-content {
-  touch-action: none;
-}
-
 .mypage-modal {
   max-height: min(88vh, 820px);
   overflow-y: auto;

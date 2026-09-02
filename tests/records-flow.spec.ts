@@ -724,6 +724,14 @@ test("my page updates profile and the edit sheet deletes an assignment", async (
   await page.getByRole("dialog", { name: "과제 수정" }).getByRole("button", { name: "과제 삭제" }).click();
   await expect(page.getByRole("heading", { name: "삭제할 과제" })).toHaveCount(0);
   expect(deleted).toBe(true);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?screen=dashboard&theme=light");
+  await page.getByRole("button", { name: "마이페이지", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "마이페이지" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.activeElement instanceof HTMLInputElement)).toBe(false);
+  const sheetHeight = await page.locator('[data-testid="bottom-sheet"]').evaluate((sheet) => sheet.getBoundingClientRect().height);
+  expect(sheetHeight).toBeGreaterThan(844 * 0.9);
 });
 
 test("notification preferences are available from the dashboard", async ({ page }) => {
