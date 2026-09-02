@@ -1,4 +1,4 @@
-# How to run RECORDS locally
+# How to run Kyelendar locally
 
 이 문서는 저장소를 처음 받은 개발자가 PostgreSQL, FastAPI API, React 웹을 자신의 컴퓨터에서 실행하는 절차다.
 

@@ -1,6 +1,6 @@
-# RECORDS
+# Kyelendar
 
-FastAPI API and responsive React web client for the RECORDS assignment manager.
+FastAPI API and responsive React web client for the Kyelendar assignment manager.
 
 ## Documentation
 

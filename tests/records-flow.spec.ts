@@ -64,7 +64,7 @@ test("email verification and password reset flows are connected", async ({ page 
   await page.getByRole("textbox", { name: "5자리 인증 코드" }).fill("12345");
   await page.getByRole("button", { name: "인증 코드 확인" }).click();
   await expect(page.getByRole("heading", { name: "인증이 완료됐어요." })).toBeVisible();
-  await expect(page.getByText("이메일 인증이 완료되었습니다. 이제 RECORDS를 사용할 수 있어요.")).toBeVisible();
+  await expect(page.getByText("이메일 인증이 완료되었습니다. 이제 Kyelendar를 사용할 수 있어요.")).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("records-access-token"))).toBe("verified-access");
   await page.getByRole("button", { name: "서비스 시작하기" }).click();
   await expect(page).toHaveURL(/\?screen=dashboard$/);
@@ -298,7 +298,7 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: label }).click();
     const imageDownload = await download;
-    expect(imageDownload.suggestedFilename()).toContain("records-calendar-");
+  expect(imageDownload.suggestedFilename()).toContain("kyelendar-calendar-");
     const imagePath = await imageDownload.path();
     expect(imagePath).not.toBeNull();
     const png = readFileSync(imagePath!);
@@ -314,7 +314,7 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
   const directDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "배경화면으로 저장" }).click();
   await page.getByRole("button", { name: "스마트폰 비율 (세로)로 저장" }).click();
-  expect((await directDownload).suggestedFilename()).toContain("records-calendar-");
+  expect((await directDownload).suggestedFilename()).toContain("kyelendar-calendar-");
   expect(await page.evaluate(() => (window as Window & { __shareCalled?: boolean }).__shareCalled ?? false)).toBe(false);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?screen=dashboard&theme=light");

@@ -1,8 +1,8 @@
-const CACHE_NAME = "records-shell-v4";
+const CACHE_NAME = "kyelendar-shell-v5";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
-  "/icons/records-icon.svg",
+  "/icons/kyelendar-icon.png",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
 ];
@@ -14,7 +14,7 @@ self.addEventListener("push", (event) => {
   } catch {
     data = { message: event.data?.text() };
   }
-  event.waitUntil(self.registration.showNotification(data.title || "RECORDS 알림", {
+  event.waitUntil(self.registration.showNotification(data.title || "Kyelendar 알림", {
     body: data.message || "새로운 과제 알림이 있어요.",
     data,
     tag: data.notificationId || "records-notification",

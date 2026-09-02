@@ -2,7 +2,7 @@
 
 ## 범위
 
-프로젝트 루트는 RECORDS의 Vite·React·TypeScript 클라이언트다. `index.html`, `src/`, `public/`과 루트 `package.json`을 사용하며 레거시 `web/` 하위 앱은 사용하지 않는다.
+프로젝트 루트는 Kyelendar의 Vite·React·TypeScript 클라이언트다. `index.html`, `src/`, `public/`과 루트 `package.json`을 사용하며 레거시 `web/` 하위 앱은 사용하지 않는다.
 
 현재 포함 범위:
 

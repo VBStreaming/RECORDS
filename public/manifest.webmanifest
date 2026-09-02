@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "RECORDS 과제 플래너",
-  "short_name": "RECORDS",
+  "name": "Kyelendar 과제 플래너",
+  "short_name": "Kyelendar",
   "description": "과제와 일정을 기록하는 플래너",
   "start_url": "/",
   "scope": "/",
@@ -12,21 +12,21 @@
   "theme_color": "#17191d",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icons/kyelendar-icon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/kyelendar-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons/records-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/kyelendar-icon.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
       "purpose": "any"
     }
   ]

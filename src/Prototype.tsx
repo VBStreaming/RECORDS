@@ -368,7 +368,7 @@ async function downloadCalendarImage(
   ctx.fillText("과제 플래너", 56, 58);
   ctx.fillStyle = palette.ink;
   ctx.font = '900 42px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
-  ctx.fillText("RECORDS.", 56, 108);
+  ctx.fillText("Kyelendar.", 56, 108);
 
   const cardX = landscape ? 56 : 48;
   const cardY = 148;
@@ -377,7 +377,7 @@ async function downloadCalendarImage(
   drawCalendarCard(ctx, calendar, tasks, cardX, cardY, cardWidth, cardHeight, palette);
 
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("이미지를 저장할 수 없습니다.")), "image/png"));
-  const filename = `records-calendar-${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}-${preset.id}.png`;
+  const filename = `kyelendar-calendar-${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}-${preset.id}.png`;
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -541,7 +541,7 @@ function PwaInstallPrompt() {
 
   return (
     <aside className="pwa-install-prompt" aria-label="웹앱 설치 안내">
-      <div><strong>RECORDS를 앱처럼 사용하세요</strong><span>홈 화면에 설치하면 더 빠르게 열 수 있어요.</span></div>
+      <div><strong>Kyelendar를 앱처럼 사용하세요</strong><span>홈 화면에 설치하면 더 빠르게 열 수 있어요.</span></div>
       <button onClick={() => void install()}>앱으로 설치</button>
       <button className="pwa-install-dismiss" onClick={() => { localStorage.setItem("records-pwa-install-dismissed", "true"); setInstallEvent(null); }} aria-label="설치 안내 닫기">×</button>
     </aside>
@@ -661,7 +661,7 @@ function NotificationBell() {
           </div>
           {permission === "default" && window.isSecureContext && (!isIos || isStandalone) ? <button className="browser-notification-button" onClick={() => void enableBrowserNotifications()}>브라우저 알림 허용</button> : null}
           {permission === "default" && window.isSecureContext && isIos && !isStandalone ? <p className="notification-hint">iPhone/iPad는 공유 메뉴에서 홈 화면에 추가한 뒤 앱 아이콘으로 열어야 알림을 허용할 수 있어요.</p> : null}
-          {permission === "denied" ? <p className="notification-hint">브라우저 설정에서 RECORDS 알림 권한을 허용해 주세요.</p> : null}
+          {permission === "denied" ? <p className="notification-hint">브라우저 설정에서 Kyelendar 알림 권한을 허용해 주세요.</p> : null}
           {!window.isSecureContext ? <p className="notification-hint">기기 알림은 HTTPS 접속에서 사용할 수 있어요.</p> : null}
           {permission === "unsupported" && window.isSecureContext ? <p className="notification-hint">이 브라우저는 Web Push 알림을 지원하지 않아요.</p> : null}
           {pushError ? <p className="notification-hint">{pushError}</p> : null}
@@ -681,7 +681,7 @@ function NotificationBell() {
 }
 
 function Brand() {
-  return <div className="brand">RECORDS<span>.</span></div>;
+  return <div className="brand">Kyelendar<span>.</span></div>;
 }
 
 function TabletModal({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
@@ -918,7 +918,7 @@ function VerificationPendingPage() {
       await confirmEmailVerification(email, code);
       sessionStorage.removeItem(PENDING_EMAIL_KEY);
       setStatus("success");
-      setMessage("이메일 인증이 완료되었습니다. 이제 RECORDS를 사용할 수 있어요.");
+      setMessage("이메일 인증이 완료되었습니다. 이제 Kyelendar를 사용할 수 있어요.");
     } catch (error) {
       setStatus("error");
       setMessage(apiErrorMessage(error));
@@ -947,7 +947,7 @@ function VerificationPendingPage() {
     <ThemeContext.Provider value={{ theme, toggleTheme: () => setTheme(nextTheme) }}>
       <div className={`tablet-app theme-${theme}`}>
         <main className="tablet-auth">
-          <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>RECORDS · 학생 플래너</small></section>
+          <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>Kyelendar · 학생 플래너</small></section>
           <section className="tablet-auth-form">
             <ThemeButton />
             <motion.div className="tablet-form-wrap" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
@@ -1582,13 +1582,13 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
   };
   return (
     <main className="tablet-auth">
-      <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>RECORDS · 학생 플래너</small></section>
+      <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>Kyelendar · 학생 플래너</small></section>
       <section className="tablet-auth-form">
         <ThemeButton />
         <div className="tablet-form-wrap">
           <p className="section-label">{mode === "login" ? "다시 만나서 반가워요" : "계정 만들기"}</p>
           <h2>{mode === "login" ? "다시 만나서 반가워요." : "학생 정보를 알려주세요."}</h2>
-          <p>{mode === "login" ? "이메일로 로그인해 오늘의 과제를 확인하세요." : "학번, 이름, 이메일로 RECORDS를 시작하세요."}</p>
+          <p>{mode === "login" ? "이메일로 로그인해 오늘의 과제를 확인하세요." : "학번, 이름, 이메일로 Kyelendar를 시작하세요."}</p>
           <form onSubmit={submit} noValidate>
             {mode === "signup" ? <><TabletInput icon={<IdCardIcon />} label="학번" value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="20514" inputMode="numeric" pattern="[0-9]{5}" required /><TabletInput icon={<PersonIcon />} label="이름" value={name} onChange={(event) => setName(event.target.value)} placeholder="이름" required /></> : null}
             <TabletInput icon={<EnvelopeClosedIcon />} label="이메일" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="student@school.kr" required />
