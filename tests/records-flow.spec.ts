@@ -374,6 +374,16 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect.poll(() => extractionRequests).toBe(1);
   await expect(page.getByRole("button", { name: "1. 첫 후보" })).toBeVisible();
   await expect(page.getByText("주황색 입력값을 직접 확인해 주세요.", { exact: true })).toBeVisible();
+  const candidateFitsMobile = await page.locator(".candidate-list").evaluate((list) => {
+    const button = list.querySelector("button");
+    if (!button) return false;
+    const listBox = list.getBoundingClientRect();
+    const buttonBox = button.getBoundingClientRect();
+    return getComputedStyle(list).display === "grid"
+      && buttonBox.left >= listBox.left - 1
+      && buttonBox.right <= listBox.right + 1;
+  });
+  expect(candidateFitsMobile).toBe(true);
   await expect(page.locator(".review-needed")).toHaveCount(3);
   await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("");
   await expect(page.getByRole("button", { name: "과제 저장" })).toBeDisabled();
