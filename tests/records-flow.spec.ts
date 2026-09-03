@@ -321,6 +321,7 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
 
 test("photo analysis requires an explicit action and supports candidate review", async ({ page }) => {
   let extractionRequests = 0;
+  let createdDueAt = "";
   await page.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -333,7 +334,7 @@ test("photo analysis requires an explicit action and supports candidate review",
           extractionBatchId: request.headers()["x-extraction-batch-id"], referenceDate: "2026-09-02", timezone: "Asia/Seoul",
           images: [{ imageId: request.headers()["x-client-image-id"], imageIndex: 0, status: "COMPLETED", assignments: [
             { assignmentId: "draft-1", sourceOrder: 0, title: "첫 후보", subject: "수학", startDate: null, dueDate: null, dueTime: null, sourceText: "첫 후보", confidence: null, needsReview: true, warnings: ["날짜가 불명확한 후보입니다."], possibleDuplicateOf: null },
-            { assignmentId: "draft-2", sourceOrder: 1, title: "두 번째 후보", subject: "직접 입력 과목", startDate: null, dueDate: "2030-09-10", dueTime: "09:00", sourceText: "두 번째 후보", confidence: null, needsReview: false, warnings: [], possibleDuplicateOf: null },
+            { assignmentId: "draft-2", sourceOrder: 1, title: "두 번째 후보", subject: "직접 입력 과목", startDate: null, dueDate: "2030-09-10", dueTime: "09:00:00", sourceText: "두 번째 후보", confidence: null, needsReview: false, warnings: [], possibleDuplicateOf: null },
           ], errorMessage: null }],
           summary: { totalImages: 1, completedImages: 1, failedImages: 0, totalAssignments: 2 },
         } }),
@@ -346,6 +347,7 @@ test("photo analysis requires an explicit action and supports candidate review",
     }
     if (url.pathname === "/assignments" && request.method() === "POST") {
       const payload = request.postDataJSON() as { title: string; subject: string; dueAt: string; notificationsEnabled?: boolean };
+      createdDueAt = payload.dueAt;
       await route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -414,6 +416,7 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.getByRole("textbox", { name: "과목" })).toHaveValue("직접 입력 과목");
   await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("2030-09-10");
   await page.getByRole("button", { name: "과제 저장" }).click();
+  expect(createdDueAt).toBe("2030-09-10T09:00:00+09:00");
   await expect(page.getByRole("heading", { name: "새 과제 추가" })).toBeVisible();
   await expect(page.getByRole("button", { name: "2. 두 번째 후보" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "1. 첫 후보" })).toBeVisible();

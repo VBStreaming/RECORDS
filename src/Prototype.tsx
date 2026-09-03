@@ -441,7 +441,7 @@ function todayLabel() {
 }
 
 function dueAt(date: string, time: string) {
-  return `${date}T${time}:00+09:00`;
+  return `${date}T${time ? time.slice(0, 5) : "18:00"}:00+09:00`;
 }
 
 function useOnlineStatus() {
@@ -1293,7 +1293,7 @@ function extractionCandidates(extraction: Awaited<ReturnType<typeof extractAssig
 function candidateDueAt(candidate: Candidate) {
   if (candidate.dueDate || candidate.dueTime) return {
     date: candidate.dueDate || "",
-    time: candidate.dueTime || "",
+    time: candidate.dueTime ? candidate.dueTime.slice(0, 5) : "",
   };
   if (!candidate.dueAt) return null;
   const date = new Date(candidate.dueAt);
