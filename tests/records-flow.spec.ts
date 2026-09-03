@@ -5,7 +5,6 @@ async function chooseAssignmentPhoto(page: Page) {
   await page.getByRole("button", { name: "과제 추가", exact: true }).click();
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "칠판 또는 유인물 사진 선택" }).click();
-  await page.getByRole("button", { name: "갤러리 선택" }).click();
   await (await chooser).setFiles({
     name: "assignment.png",
     mimeType: "image/png",
@@ -325,6 +324,8 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
 
 test("photo analysis requires an explicit action and supports candidate review", async ({ page }) => {
   let extractionRequests = 0;
+  let batchRequests = 0;
+  let batchSize = 0;
   await page.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -346,6 +347,25 @@ test("photo analysis requires an explicit action and supports candidate review",
     }
     if (url.pathname === "/users/me") {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments/batch" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { assignments: Array<{ title: string; subject: string; dueDate: string; dueTime: string | null }> };
+      batchRequests += 1;
+      batchSize = payload.assignments.length;
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: payload.assignments.map((assignment, index) => ({
+        id: `saved-${index}`,
+        title: assignment.title,
+        subject: assignment.subject,
+        dueAt: `${assignment.dueDate}T${assignment.dueTime || "23:59"}:00+09:00`,
+        dueTime: assignment.dueTime,
+        notificationsEnabled: true,
+        completed: false,
+        completedAt: null,
+        dayOffset: 1,
+        deadlineLabel: "D-1",
+        startDate: null,
+      })) } ) });
       return;
     }
     if (url.pathname === "/assignments" && request.method() === "POST") {
@@ -388,7 +408,7 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.locator(".day.today.selected")).toHaveCSS("background-color", "rgb(224, 82, 82)");
   await chooseAssignmentPhoto(page);
   await expect(page.locator('input[type="file"]')).toHaveCount(1);
-  await expect(page.locator('input[type="file"]')).not.toHaveAttribute("multiple");
+  await expect(page.locator('input[type="file"]')).toHaveAttribute("multiple", "");
   await expect(page.locator('input[type="file"]:not([capture])')).toHaveCount(1);
   expect(extractionRequests).toBe(0);
   await page.getByRole("button", { name: "사진 분석" }).click();
@@ -417,10 +437,13 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.getByRole("textbox", { name: "과제명" })).toHaveValue("두 번째 후보");
   await expect(page.getByRole("textbox", { name: "과목" })).toHaveValue("직접 입력 과목");
   await expect(page.getByRole("textbox", { name: "마감일" })).toHaveValue("2030-09-10");
+  await page.getByRole("checkbox", { name: "1번 후보 저장" }).uncheck();
   await page.getByRole("button", { name: "과제 저장" }).click();
+  expect(batchRequests).toBe(1);
+  expect(batchSize).toBe(1);
   await expect(page.getByRole("heading", { name: "새 과제 추가" })).toBeVisible();
   await expect(page.getByRole("button", { name: "2. 두 번째 후보" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "1. 첫 후보" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "1. 확인한 과제" })).toBeVisible();
   await page.getByRole("button", { name: "1번 후보 삭제" }).click();
   await expect(page.locator(".candidate-list")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "새 과제 추가" })).toBeVisible();
@@ -438,6 +461,164 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.getByRole("button", { name: "과제 추가", exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "칠판 또는 유인물 사진 선택" })).toBeVisible();
   await expect(page.locator('input[type="file"][accept="image/*"]')).toHaveCount(1);
+});
+
+test("analyzes every selected photo and saves every checked candidate in one batch", async ({ page }) => {
+  let extractionRequests = 0;
+  let batchSize = 0;
+  const assignmentCount = (imageIndex: number) => imageIndex === 0 ? 3 : imageIndex === 1 ? 2 : imageIndex === 2 ? 1 : 0;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments" && request.method() === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [] }) });
+      return;
+    }
+    if (url.pathname === "/assignment-extractions") {
+      const imageIndex = Number(request.headers()["x-image-index"]);
+      const count = assignmentCount(imageIndex);
+      extractionRequests += 1;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: {
+        extractionBatchId: request.headers()["x-extraction-batch-id"], referenceDate: "2026-09-03", timezone: "Asia/Seoul",
+        images: [{ imageId: request.headers()["x-client-image-id"], imageIndex, status: count ? "COMPLETED" : "NO_ASSIGNMENTS", assignments: Array.from({ length: count }, (_, sourceOrder) => ({
+          assignmentId: `draft-${imageIndex}-${sourceOrder}`,
+          sourceOrder,
+          title: `사진 ${imageIndex + 1} 과제 ${sourceOrder + 1}`,
+          subject: "자율",
+          startDate: null,
+          dueDate: "2030-09-10",
+          dueTime: "09:00",
+          sourceText: `사진 ${imageIndex + 1} 원문 ${sourceOrder + 1}`,
+          confidence: null,
+          needsReview: false,
+          warnings: [],
+          possibleDuplicateOf: null,
+        })), errorMessage: null }],
+        summary: { totalImages: 1, completedImages: 1, failedImages: 0, totalAssignments: count },
+      } }) });
+      return;
+    }
+    if (url.pathname === "/assignments/batch" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { assignments: Array<{ title: string; subject: string; dueDate: string; dueTime: string | null }> };
+      batchSize = payload.assignments.length;
+      const savedAssignments = payload.assignments.map((assignment, index) => ({
+        id: `saved-${index}`,
+        title: assignment.title,
+        subject: assignment.subject,
+        dueAt: `${assignment.dueDate}T${assignment.dueTime || "23:59"}:00+09:00`,
+        dueTime: assignment.dueTime,
+        notificationsEnabled: true,
+        completed: false,
+        completedAt: null,
+        dayOffset: 1,
+        deadlineLabel: "D-1",
+        startDate: null,
+      }));
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: savedAssignments }) });
+      return;
+    }
+    if (url.pathname.startsWith("/notifications")) {
+      const data = url.pathname.endsWith("unread-count") ? { count: 0 } : url.pathname.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?screen=dashboard&theme=light");
+  await page.getByRole("button", { name: "과제 추가", exact: true }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "칠판 또는 유인물 사진 선택" }).click();
+  await (await chooser).setFiles(Array.from({ length: 3 }, (_, index) => ({
+    name: `assignment-${index}.png`,
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+  })));
+  await expect(page.locator(".selected-image")).toHaveCount(3);
+  await expect(page.locator('input[type="file"]')).toHaveAttribute("multiple", "");
+
+  const replaceChooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "전체 사진 다시 선택" }).click();
+  await (await replaceChooser).setFiles({ name: "replacement.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") });
+  await expect(page.locator(".selected-image")).toHaveCount(1);
+
+  const restoredChooser = page.waitForEvent("filechooser");
+  await page.locator(".photo-picker-trigger").click();
+  await (await restoredChooser).setFiles(Array.from({ length: 3 }, (_, index) => ({
+    name: `assignment-${index}.png`,
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+  })));
+  await expect(page.locator(".selected-image")).toHaveCount(4);
+
+  await page.getByRole("button", { name: "사진 분석 (4장)" }).click();
+  await expect.poll(() => extractionRequests).toBe(4);
+  await expect(page.getByText("사진 4/4장 분석 완료 · 과제 6개 · 선택 6개", { exact: true })).toBeVisible();
+  await expect(page.locator(".candidate-option")).toHaveCount(6);
+  await page.getByRole("button", { name: "선택한 6개 과제 저장" }).click();
+  expect(batchSize).toBe(6);
+  await expect(page.getByRole("heading", { name: "새 과제 추가" })).toHaveCount(0);
+});
+
+test("keeps successful extraction results when one photo fails and retries only that photo", async ({ page }) => {
+  let extractionRequests = 0;
+  let failedOnce = false;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments" && request.method() === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [] }) });
+      return;
+    }
+    if (url.pathname === "/assignment-extractions") {
+      const imageIndex = Number(request.headers()["x-image-index"]);
+      extractionRequests += 1;
+      if (imageIndex === 1 && !failedOnce) {
+        failedOnce = true;
+        await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ success: false, error: { code: "AI_EXTRACTION_FAILED", message: "분석에 실패했습니다." } }) });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: {
+        extractionBatchId: request.headers()["x-extraction-batch-id"], referenceDate: "2026-09-03", timezone: "Asia/Seoul",
+        images: [{ imageId: request.headers()["x-client-image-id"], imageIndex, status: "COMPLETED", assignments: Array.from({ length: imageIndex === 1 ? 2 : 1 }, (_, sourceOrder) => ({
+          assignmentId: `draft-${imageIndex}-${sourceOrder}`, sourceOrder, title: `사진 ${imageIndex + 1} 과제 ${sourceOrder + 1}`, subject: "자율", startDate: null, dueDate: "2030-09-10", dueTime: "09:00", sourceText: null, confidence: null, needsReview: false, warnings: [], possibleDuplicateOf: null,
+        })), errorMessage: null }],
+        summary: { totalImages: 1, completedImages: 1, failedImages: 0, totalAssignments: imageIndex === 1 ? 2 : 1 },
+      } }) });
+      return;
+    }
+    if (url.pathname.startsWith("/notifications")) {
+      const data = url.pathname.endsWith("unread-count") ? { count: 0 } : url.pathname.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?screen=dashboard&theme=light");
+  await page.getByRole("button", { name: "과제 추가", exact: true }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "칠판 또는 유인물 사진 선택" }).click();
+  await (await chooser).setFiles(Array.from({ length: 3 }, (_, index) => ({
+    name: `partial-${index}.png`, mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+  })));
+  await page.getByRole("button", { name: "사진 분석 (3장)" }).click();
+  await expect.poll(() => extractionRequests).toBe(3);
+  await expect(page.getByText("사진 1장은 분석하지 못했어요.", { exact: false })).toBeVisible();
+  await expect(page.getByText("사진 2/3장 분석 완료 · 과제 2개 · 선택 2개", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "사진 2 다시 분석" }).click();
+  await expect.poll(() => extractionRequests).toBe(4);
+  await expect(page.getByText("사진 3/3장 분석 완료 · 과제 4개 · 선택 4개", { exact: true })).toBeVisible();
 });
 
 test("expired access token redirects to login on tablet and mobile", async ({ page }) => {
