@@ -51,7 +51,6 @@ import {
   confirmEmailVerification,
   confirmPasswordReset,
   createAssignment,
-  addSharedAssignment,
   deleteAccount,
   deleteAssignment,
   extractAssignment,
@@ -67,7 +66,6 @@ import {
   RecordsApiError,
   signup,
   getNotificationPreferences,
-  getSharedAssignment,
   unreadNotificationCount,
   updateNotificationPreferences,
   registerPushSubscription,
@@ -80,7 +78,6 @@ import {
   type Candidate,
   type NotificationPreferences,
   type User,
-  type SharedAssignment,
 } from "./recordsApi";
 import { enableWebPush, isWebPushConfigured, requestWebPushPermission } from "./webPush";
 
@@ -100,15 +97,6 @@ type Task = {
   done: boolean;
   color: string;
 };
-type ShareState = { taskId: string; link: string; busy: boolean; error: string };
-type AssignmentShareDraft = {
-  title: string;
-  subject: string;
-  dueDate: string;
-  dueTime: string;
-  notificationsEnabled: boolean;
-};
-
 type CalendarImagePreset = {
   id: "phone" | "tablet-landscape" | "tablet-portrait";
   label: string;
@@ -136,7 +124,6 @@ const calendarImagePresets: CalendarImagePreset[] = [
 const ThemeContext = createContext<{ theme: Theme; toggleTheme: () => void } | null>(null);
 const THEME_KEY = "records-theme";
 const PENDING_EMAIL_KEY = "records-pending-verification-email";
-const ASSIGNMENT_SHARE_RETURN_KEY = "records-assignment-share-return";
 
 function useTheme() {
   const value = useContext(ThemeContext);
@@ -193,42 +180,7 @@ function openLoginPage() {
 }
 
 function completeAuth(onSuccess: () => void) {
-  const shareReturnUrl = sessionStorage.getItem(ASSIGNMENT_SHARE_RETURN_KEY);
-  if (shareReturnUrl) {
-    sessionStorage.removeItem(ASSIGNMENT_SHARE_RETURN_KEY);
-    window.location.assign(shareReturnUrl);
-    return;
-  }
-  const shareToken = new URLSearchParams(window.location.search).get("share");
-  if (shareToken && shareToken !== "1") {
-    window.location.assign(`/shared-assignments/${encodeURIComponent(shareToken)}`);
-    return;
-  }
   onSuccess();
-}
-
-function assignmentShareDraftFromLocation(): AssignmentShareDraft | null {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("share") !== "1") return null;
-  const title = params.get("t")?.trim() || params.get("title")?.trim() || "";
-  const subject = params.get("s")?.trim() || params.get("subject")?.trim() || "";
-  const dueDate = params.get("d") || params.get("dueDate") || "";
-  const dueTime = params.get("tm") || params.get("dueTime") || "";
-  const notifications = params.get("n") ?? params.get("notifications");
-  if (!title || !subject || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || (dueTime && !/^\d{2}:\d{2}$/.test(dueTime))) return null;
-  return { title, subject, dueDate, dueTime, notificationsEnabled: notifications !== "0" };
-}
-
-function assignmentShareUrl(task: Task) {
-  const params = new URLSearchParams({
-    share: "1",
-    t: task.title.trim(),
-    s: task.subject.trim(),
-    d: task.date,
-    tm: task.time,
-    n: task.notificationsEnabled ? "1" : "0",
-  });
-  return `${window.location.origin}/assignments?${params.toString()}`;
 }
 
 function loginEmailFromUrl() {
@@ -420,7 +372,7 @@ async function downloadCalendarImage(
   ctx.fillText("과제 플래너", 56, 58);
   ctx.fillStyle = palette.ink;
   ctx.font = '900 42px "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", Roboto, system-ui, sans-serif';
-  ctx.fillText("Kyelendar.", 56, 108);
+  ctx.fillText("곌린더.", 56, 108);
 
   const cardX = landscape ? 56 : 48;
   const cardY = 148;
@@ -429,7 +381,7 @@ async function downloadCalendarImage(
   drawCalendarCard(ctx, calendar, tasks, cardX, cardY, cardWidth, cardHeight, palette);
 
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("이미지를 저장할 수 없습니다.")), "image/png"));
-  const filename = `kyelendar-calendar-${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}-${preset.id}.png`;
+  const filename = `gyelendar-calendar-${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}-${preset.id}.png`;
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -593,7 +545,7 @@ function PwaInstallPrompt() {
 
   return (
     <aside className="pwa-install-prompt" aria-label="웹앱 설치 안내">
-      <div><strong>Kyelendar를 앱처럼 사용하세요</strong><span>홈 화면에 설치하면 더 빠르게 열 수 있어요.</span></div>
+      <div><strong>곌린더를 앱처럼 사용하세요</strong><span>홈 화면에 설치하면 더 빠르게 열 수 있어요.</span></div>
       <button onClick={() => void install()}>앱으로 설치</button>
       <button className="pwa-install-dismiss" onClick={() => { localStorage.setItem("records-pwa-install-dismissed", "true"); setInstallEvent(null); }} aria-label="설치 안내 닫기">×</button>
     </aside>
@@ -713,7 +665,7 @@ function NotificationBell() {
           </div>
           {permission === "default" && window.isSecureContext && (!isIos || isStandalone) ? <button className="browser-notification-button" onClick={() => void enableBrowserNotifications()}>브라우저 알림 허용</button> : null}
           {permission === "default" && window.isSecureContext && isIos && !isStandalone ? <p className="notification-hint">iPhone/iPad는 공유 메뉴에서 홈 화면에 추가한 뒤 앱 아이콘으로 열어야 알림을 허용할 수 있어요.</p> : null}
-          {permission === "denied" ? <p className="notification-hint">브라우저 설정에서 Kyelendar 알림 권한을 허용해 주세요.</p> : null}
+          {permission === "denied" ? <p className="notification-hint">브라우저 설정에서 곌린더 알림 권한을 허용해 주세요.</p> : null}
           {!window.isSecureContext ? <p className="notification-hint">기기 알림은 HTTPS 접속에서 사용할 수 있어요.</p> : null}
           {permission === "unsupported" && window.isSecureContext ? <p className="notification-hint">이 브라우저는 Web Push 알림을 지원하지 않아요.</p> : null}
           {pushError ? <p className="notification-hint">{pushError}</p> : null}
@@ -733,7 +685,7 @@ function NotificationBell() {
 }
 
 function Brand() {
-  return <div className="brand">Kyelendar<span>.</span></div>;
+  return <div className="brand">곌린더<span>.</span></div>;
 }
 
 function TabletModal({ label, className = "", overlayClassName = "", children }: { label: string; className?: string; overlayClassName?: string; children: ReactNode }) {
@@ -822,7 +774,7 @@ function MyPageContent({ profile, onProfileUpdated, onPasswordChanged, onDeleteA
           <button className="save-button" disabled={busy || !currentPassword || !newPassword || !confirmPassword}>비밀번호 변경</button>
         </form>
       </section>
-      <section className="mypage-logout"><div><h3>로그아웃</h3><p>현재 기기에서 Kyelendar 계정을 로그아웃합니다.</p></div><button type="button" onClick={onLogout}><ExitIcon />로그아웃</button></section>
+      <section className="mypage-logout"><div><h3>로그아웃</h3><p>현재 기기에서 곌린더 계정을 로그아웃합니다.</p></div><button type="button" onClick={onLogout}><ExitIcon />로그아웃</button></section>
       <section className="mypage-danger"><div><h3>회원탈퇴</h3><p>계정과 모든 과제 및 알림이 영구적으로 삭제됩니다.</p></div><button type="button" onClick={onDeleteAccount}>회원탈퇴</button></section>
     </>
   );
@@ -932,7 +884,7 @@ function LogoutConfirmModal({ onClose, onConfirm, portalContainer }: { onClose: 
   const modal = (
     <TabletModal label="로그아웃 확인" overlayClassName="logout-confirm-overlay">
       <header><div><p className="section-label">계정</p><h2>로그아웃할까요?</h2></div><button onClick={onClose} aria-label="닫기"><Cross2Icon /></button></header>
-      <p className="logout-confirm-message">현재 기기에서 Kyelendar 계정을 로그아웃합니다.</p>
+      <p className="logout-confirm-message">현재 기기에서 곌린더 계정을 로그아웃합니다.</p>
       <div className="logout-confirm-actions"><button type="button" onClick={onClose}>취소</button><button type="button" onClick={onConfirm}><ExitIcon />로그아웃</button></div>
     </TabletModal>
   );
@@ -968,7 +920,7 @@ function VerificationPendingPage() {
       await confirmEmailVerification(email, code);
       sessionStorage.removeItem(PENDING_EMAIL_KEY);
       setStatus("success");
-      setMessage("이메일 인증이 완료되었습니다. 이제 Kyelendar를 사용할 수 있어요.");
+      setMessage("이메일 인증이 완료되었습니다. 이제 곌린더를 사용할 수 있어요.");
     } catch (error) {
       setStatus("error");
       setMessage(apiErrorMessage(error));
@@ -997,7 +949,7 @@ function VerificationPendingPage() {
     <ThemeContext.Provider value={{ theme, toggleTheme: () => setTheme(nextTheme) }}>
       <div className={`tablet-app theme-${theme}`}>
         <main className="tablet-auth">
-          <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>Kyelendar · 학생 플래너</small></section>
+          <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>곌린더 · 학생 플래너</small></section>
           <section className="tablet-auth-form">
             <ThemeButton />
             <motion.div className="tablet-form-wrap" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
@@ -1275,63 +1227,6 @@ function TaskList({ tasks, selectedDate, onToggle, onEdit }: { tasks: Task[]; se
   );
 }
 
-async function copyShareLink(link: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(link);
-    return;
-  }
-  const input = document.createElement("textarea");
-  input.value = link;
-  input.style.position = "fixed";
-  input.style.opacity = "0";
-  document.body.appendChild(input);
-  input.select();
-  document.execCommand("copy");
-  input.remove();
-}
-
-function ShareLinkPanel({ taskTitle, link, busy, error, onCreate }: {
-  taskTitle: string;
-  link: string;
-  busy: boolean;
-  error: string;
-  onCreate: () => void;
-}) {
-  const [status, setStatus] = useState("");
-  const canNativeShare = "share" in navigator;
-  const share = async () => {
-    try {
-      if (canNativeShare) await (navigator as Navigator & { share: (data: ShareData) => Promise<void> }).share({ title: taskTitle, text: `${taskTitle} 과제를 Kyelendar에서 확인해 보세요.`, url: link });
-      else await copyShareLink(link);
-      setStatus(canNativeShare ? "공유 창을 열었어요." : "링크를 복사했어요.");
-    } catch (shareError) {
-      if (shareError instanceof DOMException && shareError.name === "AbortError") return;
-      setStatus("공유하지 못했어요. 링크를 복사해 주세요.");
-    }
-  };
-  const copy = async () => {
-    try {
-      await copyShareLink(link);
-      setStatus("링크를 복사했어요.");
-    } catch {
-      setStatus("링크를 복사하지 못했어요.");
-    }
-  };
-  return (
-    <div className="share-panel">
-      <div className="share-panel-heading"><span>과제 공유</span><small>링크를 받은 사람의 과제 등록 창에 값을 채워드려요.</small></div>
-      {link ? (
-        <>
-          <input className="share-link-input" value={link} readOnly aria-label="과제 공유 링크" />
-          <div className="share-actions"><button type="button" className="share-secondary-button" onClick={() => void copy()}>링크 복사</button>{canNativeShare ? <button type="button" className="share-primary-button" onClick={() => void share()}>공유하기</button> : null}</div>
-          {status ? <p className="share-status" role="status">{status}</p> : null}
-        </>
-      ) : <button type="button" className="share-primary-button" onClick={onCreate} disabled={busy}>{busy ? "링크 만드는 중..." : "공유 링크 만들기"}</button>}
-      {error ? <p className="auth-error" role="alert">{error}</p> : null}
-    </div>
-  );
-}
-
 function PhotoPicker({ file, onRequestSelect }: { file: File | null; onRequestSelect: () => void }) {
   return (
     <div className="photo-field">
@@ -1477,28 +1372,26 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const online = useOnlineStatus();
   useAuthExpiredRedirect();
   const { screenRef } = useScreenPortal();
-  const [sharedDraft] = useState<AssignmentShareDraft | null>(() => assignmentShareDraftFromLocation());
   const [portalReady, setPortalReady] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
   const [profile, setProfile] = useState<User | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(() => Boolean(sharedDraft));
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
   const [myPageOpen, setMyPageOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
-  const [title, setTitle] = useState(() => sharedDraft?.title || "");
-  const [subject, setSubject] = useState(() => sharedDraft?.subject || "");
-  const [dueDate, setDueDate] = useState(() => sharedDraft?.dueDate || todayInSeoul());
-  const [dueTime, setDueTime] = useState(() => sharedDraft?.dueTime || "18:00");
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => sharedDraft?.notificationsEnabled ?? true);
+  const [title, setTitle] = useState("");
+  const [subject, setSubject] = useState("");
+  const [dueDate, setDueDate] = useState(todayInSeoul);
+  const [dueTime, setDueTime] = useState("18:00");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState(0);
   const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
   const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [shareState, setShareState] = useState<ShareState>({ taskId: "", link: "", busy: false, error: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1522,10 +1415,6 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   useEffect(() => setPortalReady(true), []);
-
-  useEffect(() => {
-    if (sharedDraft) window.history.replaceState(null, "", "/?screen=dashboard");
-  }, [sharedDraft]);
 
   useEffect(() => {
     if (!sheetOpen && !editingTask) return;
@@ -1673,10 +1562,6 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     finally { setBusy(false); }
   };
 
-  const createShareLink = (task: Task) => {
-    setShareState({ taskId: task.id, link: assignmentShareUrl(task), busy: false, error: "" });
-  };
-
   return (
     <>
       <MobileScroll className={`app-screen theme-${theme}`}>
@@ -1744,7 +1629,6 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
               <label className="form-field"><span>마감 시간</span><input type="time" value={editingTask.time} onChange={(event) => setEditingTask((task) => task ? { ...task, time: event.target.value } : task)} /></label>
             </div>
             <label className="alarm-toggle"><input type="checkbox" checked={editingTask.notificationsEnabled} onChange={(event) => setEditingTask((task) => task ? { ...task, notificationsEnabled: event.target.checked } : task)} /><BellIcon />마감 알림 받기</label>
-            <ShareLinkPanel taskTitle={editingTask.title} link={shareState.taskId === editingTask.id ? shareState.link : ""} busy={shareState.taskId === editingTask.id && shareState.busy} error={shareState.taskId === editingTask.id ? shareState.error : ""} onCreate={() => createShareLink(editingTask)} />
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
             <button className="assignment-delete-button" type="button" onClick={() => void removeTask()} disabled={busy}>과제 삭제</button>
           </div>
@@ -1839,13 +1723,13 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
   };
   return (
     <main className="tablet-auth">
-      <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>Kyelendar · 학생 플래너</small></section>
+          <section className="tablet-auth-brand"><Brand /><div><p className="section-label">과제 플래너</p><h1>학교의 모든 마감을<br />한 화면에.</h1><p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p></div><small>곌린더 · 학생 플래너</small></section>
       <section className="tablet-auth-form">
         <ThemeButton />
         <div className="tablet-form-wrap">
           <p className="section-label">{mode === "login" ? "다시 만나서 반가워요" : "계정 만들기"}</p>
           <h2>{mode === "login" ? "다시 만나서 반가워요." : "학생 정보를 알려주세요."}</h2>
-          <p>{mode === "login" ? "이메일로 로그인해 오늘의 과제를 확인하세요." : "학번, 이름, 이메일로 Kyelendar를 시작하세요."}</p>
+          <p>{mode === "login" ? "이메일로 로그인해 오늘의 과제를 확인하세요." : "학번, 이름, 이메일로 곌린더를 시작하세요."}</p>
           <form onSubmit={submit} noValidate>
             {mode === "signup" ? <><TabletInput icon={<IdCardIcon />} label="학번" value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="20514" inputMode="numeric" pattern="[0-9]{5}" required /><TabletInput icon={<PersonIcon />} label="이름" value={name} onChange={(event) => setName(event.target.value)} placeholder="이름" required /></> : null}
             <TabletInput icon={<EnvelopeClosedIcon />} label="이메일" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="student@school.kr" required />
@@ -1865,27 +1749,25 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const { theme } = useTheme();
   const [view, setView] = useState<"dashboard" | "calendar">("dashboard");
   const online = useOnlineStatus();
-  const [sharedDraft] = useState<AssignmentShareDraft | null>(() => assignmentShareDraftFromLocation());
   const [tasks, setTasks] = useState(initialTasks);
   const [profile, setProfile] = useState<User | null>(null);
-  const [addOpen, setAddOpen] = useState(() => Boolean(sharedDraft));
+  const [addOpen, setAddOpen] = useState(false);
   const [calendarSaveOpen, setCalendarSaveOpen] = useState(false);
   const [myPageOpen, setMyPageOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
-  const [title, setTitle] = useState(() => sharedDraft?.title || "");
-  const [subject, setSubject] = useState(() => sharedDraft?.subject || "");
-  const [dueDate, setDueDate] = useState(() => sharedDraft?.dueDate || todayInSeoul());
-  const [dueTime, setDueTime] = useState(() => sharedDraft?.dueTime || "18:00");
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => sharedDraft?.notificationsEnabled ?? true);
+  const [title, setTitle] = useState("");
+  const [subject, setSubject] = useState("");
+  const [dueDate, setDueDate] = useState(todayInSeoul);
+  const [dueTime, setDueTime] = useState("18:00");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState(0);
   const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
   const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [shareState, setShareState] = useState<ShareState>({ taskId: "", link: "", busy: false, error: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1895,10 +1777,6 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const progress = taskProgress(tasks);
   const deadline = deadlineSummary(tasks);
   useBottomSheetOverscroll(addOpen || Boolean(editingTask) || calendarSaveOpen || myPageOpen || deleteAccountOpen);
-
-  useEffect(() => {
-    if (sharedDraft) window.history.replaceState(null, "", "/?screen=dashboard");
-  }, [sharedDraft]);
 
   const saveCalendarImage = async (preset: CalendarImagePreset) => {
     setCalendarSaveBusy(true);
@@ -2049,9 +1927,6 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     finally { setBusy(false); }
   };
 
-  const createShareLink = (task: Task) => {
-    setShareState({ taskId: task.id, link: assignmentShareUrl(task), busy: false, error: "" });
-  };
   return (
     <main className="tablet-dashboard">
       <aside className="tablet-sidebar">
@@ -2123,7 +1998,6 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
               <label className="form-field"><span>마감 시간</span><input type="time" value={editingTask.time} onChange={(event) => setEditingTask((task) => task ? { ...task, time: event.target.value } : task)} /></label>
             </div>
             <label className="alarm-toggle"><input type="checkbox" checked={editingTask.notificationsEnabled} onChange={(event) => setEditingTask((task) => task ? { ...task, notificationsEnabled: event.target.checked } : task)} /><BellIcon />마감 알림 받기</label>
-            <ShareLinkPanel taskTitle={editingTask.title} link={shareState.taskId === editingTask.id ? shareState.link : ""} busy={shareState.taskId === editingTask.id && shareState.busy} error={shareState.taskId === editingTask.id ? shareState.error : ""} onCreate={() => createShareLink(editingTask)} />
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
             <button className="assignment-delete-button" type="button" onClick={() => void removeTask()} disabled={busy}>과제 삭제</button>
           </TabletModal>
@@ -2163,119 +2037,11 @@ function TabletWebPrototype() {
   );
 }
 
-function sharedDeadline(assignment: SharedAssignment) {
-  const date = new Date(assignment.dueAt);
-  const dateLabel = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" }).format(date);
-  const timeLabel = assignment.dueTime
-    ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(`2000-01-01T${assignment.dueTime.slice(0, 5)}:00+09:00`))
-    : "시간 미정";
-  return `${dateLabel} · ${timeLabel}`;
-}
-
-function shareDraftDeadline(draft: AssignmentShareDraft) {
-  const dateLabel = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" }).format(new Date(`${draft.dueDate}T00:00:00+09:00`));
-  return `${dateLabel} · ${draft.dueTime || "시간 미정"}`;
-}
-
-function UrlAssignmentSharePage({ draft }: { draft: AssignmentShareDraft | null }) {
-  const theme = themeFromUrl();
-  const loggedIn = hasToken();
-
-  useEffect(() => {
-    if (!draft || !loggedIn) return;
-    const params = new URLSearchParams(window.location.search);
-    params.set("screen", "dashboard");
-    window.location.assign(`/?${params.toString()}`);
-  }, [draft, loggedIn]);
-
-  const openLogin = () => {
-    sessionStorage.setItem(ASSIGNMENT_SHARE_RETURN_KEY, `${window.location.pathname}${window.location.search}`);
-    window.location.assign("/?screen=login");
-  };
-
-  return (
-    <div className={`tablet-app theme-${theme}`}>
-      <main className="shared-assignment-page" aria-label="공유된 과제">
-        <Brand />
-        {!draft ? <section className="shared-assignment-card"><p className="auth-error" role="alert">유효하지 않은 과제 공유 링크입니다.</p></section> : loggedIn ? <p className="shared-assignment-message">과제 등록 창을 여는 중...</p> : (
-          <section className="shared-assignment-card">
-            <p className="section-label">공유된 과제</p>
-            <h1>{draft.title}</h1>
-            <span className="shared-assignment-subject">{draft.subject}</span>
-            <p className="shared-assignment-deadline"><ClockIcon /> {shareDraftDeadline(draft)}</p>
-            <p className="shared-assignment-message">로그인하면 새 과제 등록 창에 내용을 채워드려요.</p>
-            <button className="save-button" type="button" onClick={openLogin}>로그인 후 과제 추가</button>
-          </section>
-        )}
-      </main>
-    </div>
-  );
-}
-
-function SharedAssignmentPage({ token }: { token: string }) {
-  const [assignment, setAssignment] = useState<SharedAssignment | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
-  const [added, setAdded] = useState(false);
-  const [error, setError] = useState("");
-  const theme = themeFromUrl();
-  const loginUrl = `/?screen=login&share=${encodeURIComponent(token)}`;
-
-  useEffect(() => {
-    let mounted = true;
-    getSharedAssignment(token)
-      .then((result) => { if (mounted) setAssignment(result); })
-      .catch((loadError) => { if (mounted) setError(apiErrorMessage(loadError)); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, [token]);
-
-  const addToMyAssignments = async () => {
-    if (!hasToken()) {
-      window.location.assign(loginUrl);
-      return;
-    }
-    setAdding(true);
-    setError("");
-    try {
-      await addSharedAssignment(token);
-      setAdded(true);
-    } catch (addError) {
-      setError(apiErrorMessage(addError));
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  return (
-    <div className={`tablet-app theme-${theme}`}>
-      <main className="shared-assignment-page" aria-label="공유된 과제">
-        <Brand />
-        {loading ? <p className="shared-assignment-message">공유 과제를 불러오는 중...</p> : assignment ? (
-          <section className="shared-assignment-card">
-            <p className="section-label">공유된 과제</p>
-            <h1>{assignment.title}</h1>
-            <span className="shared-assignment-subject">{assignment.subject}</span>
-            <p className="shared-assignment-deadline"><ClockIcon /> {sharedDeadline(assignment)}</p>
-            {added ? <p className="shared-assignment-success" role="status">내 과제에 추가했어요.</p> : <button className="save-button" type="button" onClick={() => void addToMyAssignments()} disabled={adding}>{adding ? "추가 중..." : hasToken() ? "내 과제에 추가" : "로그인 후 내 과제에 추가"}</button>}
-            {added ? <button className="share-secondary-button" type="button" onClick={() => window.location.assign("/?screen=dashboard")}>대시보드로 이동</button> : null}
-            {error ? <p className="auth-error" role="alert">{error}</p> : null}
-            {!hasToken() && !added ? <button className="auth-text-button" type="button" onClick={() => window.location.assign(loginUrl)}>로그인하기</button> : null}
-          </section>
-        ) : <section className="shared-assignment-card"><p className="auth-error" role="alert">{error || "공유 과제를 찾을 수 없습니다."}</p></section>}
-      </main>
-    </div>
-  );
-}
-
 export function WebPrototype() {
   const isMobile = useMobileViewport();
   if (window.location.pathname === "/check-email") return <VerificationPendingPage />;
   if (window.location.pathname === "/forgot-password") return <AuthLinkPage kind="forgot" />;
   if (window.location.pathname === "/reset-password") return <AuthLinkPage kind="reset" />;
-  if (window.location.pathname === "/assignments") return <UrlAssignmentSharePage draft={assignmentShareDraftFromLocation()} />;
-  const sharedMatch = window.location.pathname.match(/^\/shared-assignments\/([^/]+)$/);
-  if (sharedMatch) return <SharedAssignmentPage token={decodeURIComponent(sharedMatch[1])} />;
   const app = isMobile
     ? <MobileRuntime><Prototype /></MobileRuntime>
     : <TabletWebPrototype />;

@@ -1,6 +1,6 @@
-# How to: Kyelendar 백엔드 기능 개발
+# How to: 곌린더 백엔드 기능 개발
 
-이 문서는 Kyelendar 백엔드에서 기능 하나를 안전하게 추가하고 커밋하는 절차를 설명한다. 현재 하네스는 Python 애플리케이션을 로컬 `.venv`에서 실행하고 PostgreSQL만 Docker에서 실행한다.
+이 문서는 곌린더 백엔드에서 기능 하나를 안전하게 추가하고 커밋하는 절차를 설명한다. 현재 하네스는 Python 애플리케이션을 로컬 `.venv`에서 실행하고 PostgreSQL만 Docker에서 실행한다.
 
 ## 준비 사항
 

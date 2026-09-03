@@ -1,6 +1,6 @@
-# Kyelendar
+# 곌린더
 
-FastAPI API and responsive React web client for the Kyelendar assignment manager.
+FastAPI API and responsive React web client for the 곌린더 assignment manager.
 
 ## Documentation
 

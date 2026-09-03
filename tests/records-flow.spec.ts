@@ -64,7 +64,7 @@ test("email verification and password reset flows are connected", async ({ page 
   await page.getByRole("textbox", { name: "5자리 인증 코드" }).fill("12345");
   await page.getByRole("button", { name: "인증 코드 확인" }).click();
   await expect(page.getByRole("heading", { name: "인증이 완료됐어요." })).toBeVisible();
-  await expect(page.getByText("이메일 인증이 완료되었습니다. 이제 Kyelendar를 사용할 수 있어요.")).toBeVisible();
+  await expect(page.getByText("이메일 인증이 완료되었습니다. 이제 곌린더를 사용할 수 있어요.")).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("records-access-token"))).toBe("verified-access");
   await page.getByRole("button", { name: "서비스 시작하기" }).click();
   await expect(page).toHaveURL(/\?screen=dashboard$/);
@@ -295,7 +295,7 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: label }).click();
     const imageDownload = await download;
-  expect(imageDownload.suggestedFilename()).toContain("kyelendar-calendar-");
+    expect(imageDownload.suggestedFilename()).toContain("gyelendar-calendar-");
     const imagePath = await imageDownload.path();
     expect(imagePath).not.toBeNull();
     const png = readFileSync(imagePath!);
@@ -311,7 +311,7 @@ test("saving an assignment selects its month in the calendar", async ({ page }) 
   const directDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "배경화면으로 저장" }).click();
   await page.getByRole("button", { name: "스마트폰 비율 (세로)로 저장" }).click();
-  expect((await directDownload).suggestedFilename()).toContain("kyelendar-calendar-");
+  expect((await directDownload).suggestedFilename()).toContain("gyelendar-calendar-");
   expect(await page.evaluate(() => (window as Window & { __shareCalled?: boolean }).__shareCalled ?? false)).toBe(false);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?screen=dashboard&theme=light");
@@ -437,68 +437,6 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.getByRole("button", { name: "과제 추가", exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "칠판 또는 유인물 사진 선택" })).toBeVisible();
   await expect(page.locator('input[type="file"][accept="image/*"]')).toHaveCount(1);
-});
-
-test("assignment share links open a prefilled registration form without saving", async ({ page }) => {
-  const sharedAssignment = {
-    id: "assignment-1",
-    title: "공유 수학 과제",
-    subject: "수학",
-    dueAt: new Date().toISOString(),
-    dueTime: "18:00:00",
-    notificationsEnabled: true,
-    completed: false,
-    completedAt: null,
-    dayOffset: 0,
-    deadlineLabel: "D-Day",
-    startDate: null,
-  };
-  let createRequests = 0;
-  await page.route("**/*", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    if (url.pathname === "/users/me") {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
-      return;
-    }
-    if (url.pathname === "/assignments" && request.method() === "GET" && request.resourceType() !== "document") {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [sharedAssignment] }) });
-      return;
-    }
-    if (url.pathname === "/assignments/assignment-1/share" && request.method() === "POST") {
-      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ success: false }) });
-      return;
-    }
-    if (url.pathname === "/assignments" && request.method() === "POST") {
-      createRequests += 1;
-      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: sharedAssignment }) });
-      return;
-    }
-    if (url.pathname.startsWith("/notifications")) {
-      const data = url.pathname.endsWith("unread-count") ? { count: 0 } : url.pathname.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
-      return;
-    }
-    await route.continue();
-  });
-  await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
-  await page.setViewportSize({ width: 1024, height: 768 });
-  await page.goto("/?screen=dashboard&theme=light");
-  await page.getByRole("button", { name: "공유 수학 과제 수정" }).click();
-  await page.getByRole("button", { name: "공유 링크 만들기" }).click();
-  const link = await page.getByRole("textbox", { name: "과제 공유 링크" }).inputValue();
-  const sharedUrl = new URL(link);
-  expect(sharedUrl.pathname).toBe("/assignments");
-  expect(sharedUrl.searchParams.get("share")).toBe("1");
-  expect(sharedUrl.searchParams.get("t")).toBe("공유 수학 과제");
-  expect(sharedUrl.searchParams.get("s")).toBe("수학");
-  expect(sharedUrl.searchParams.get("title")).toBeNull();
-  await page.goto(`${sharedUrl.pathname}${sharedUrl.search}`);
-  await expect(page).toHaveURL(/\/\?share=1&.*screen=dashboard|\/\?screen=dashboard&.*share=1/);
-  await expect(page.getByRole("dialog", { name: "새 과제 추가" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "과제명" })).toHaveValue("공유 수학 과제");
-  await expect(page.getByRole("textbox", { name: "과목" })).toHaveValue("수학");
-  expect(createRequests).toBe(0);
 });
 
 test("expired access token redirects to login on tablet and mobile", async ({ page }) => {

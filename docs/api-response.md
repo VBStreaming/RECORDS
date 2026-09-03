@@ -2,7 +2,7 @@
 
 상태: **구현 완료**
 
-이 문서는 Kyelendar API의 JSON 성공·오류 응답 형식과 전역 예외 처리 규칙을 정의한다. `/docs`, `/openapi.json`과 body가 없는 `204 No Content` 응답은 envelope 대상이 아니다.
+이 문서는 곌린더 API의 JSON 성공·오류 응답 형식과 전역 예외 처리 규칙을 정의한다. `/docs`, `/openapi.json`과 body가 없는 `204 No Content` 응답은 envelope 대상이 아니다.
 
 ## 성공 응답
 

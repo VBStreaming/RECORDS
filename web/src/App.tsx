@@ -86,8 +86,8 @@ function monthRange(cursor: Date) {
 
 function Brand() {
   return (
-    <div className="brand" aria-label="RECORDS">
-      RECORDS<span>.</span>
+    <div className="brand" aria-label="곌린더">
+      곌린더<span>.</span>
     </div>
   );
 }
@@ -135,7 +135,7 @@ function AuthScreen({ theme, onTheme }: { theme: Theme; onTheme: () => void }) {
           <h1>학교의 모든 마감을<br />한 화면에.</h1>
           <p>달력과 D-Day를 함께 보며 오늘 할 일을 가볍게 정리하세요.</p>
         </div>
-        <small>RECORDS · STUDENT PLANNER</small>
+        <small>곌린더 · 학생 플래너</small>
       </section>
       <section className="auth-form-panel">
         <ThemeButton theme={theme} onToggle={onTheme} />

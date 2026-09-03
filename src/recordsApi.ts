@@ -26,15 +26,6 @@ export type Assignment = {
   startDate: string | null;
   dueTime?: string | null;
 };
-export type SharedAssignment = {
-  title: string;
-  subject: string;
-  dueAt: string;
-  notificationsEnabled: boolean;
-  startDate: string | null;
-  dueTime: string | null;
-  expiresAt: string;
-};
 export type AppNotification = {
   id: string;
   assignmentId: string;
@@ -456,14 +447,6 @@ export async function createAssignment(title: string, subject: string, dueAt: st
   upsertAssignment(assignment);
   queueOperation({ key: localId(), type: "create", assignmentId: assignment.id, payload });
   return assignment;
-}
-
-export function getSharedAssignment(token: string) {
-  return request<SharedAssignment>(`/shared-assignments/${encodeURIComponent(token)}`);
-}
-
-export function addSharedAssignment(token: string) {
-  return request<Assignment>(`/shared-assignments/${encodeURIComponent(token)}/add`, { method: "POST" });
 }
 
 export type BatchAssignmentPayload = {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "kyelendar-shell-v5";
+const CACHE_NAME = "gyelendar-shell-v6";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -14,10 +14,12 @@ self.addEventListener("push", (event) => {
   } catch {
     data = { message: event.data?.text() };
   }
-  event.waitUntil(self.registration.showNotification(data.title || "Kyelendar 알림", {
+  event.waitUntil(self.registration.showNotification(data.title || "곌린더 알림", {
     body: data.message || "새로운 과제 알림이 있어요.",
+    icon: data.icon || "/icons/icon-192.png",
+    badge: data.badge || "/icons/icon-192.png",
     data,
-    tag: data.notificationId || "records-notification",
+    tag: data.notificationId || "gyelendar-notification",
   }));
 });
 

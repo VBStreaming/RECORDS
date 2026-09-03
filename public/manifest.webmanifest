@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Kyelendar 과제 플래너",
-  "short_name": "Kyelendar",
+  "name": "곌린더 과제 플래너",
+  "short_name": "곌린더",
   "description": "과제와 일정을 기록하는 플래너",
   "start_url": "/",
   "scope": "/",
