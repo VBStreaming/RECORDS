@@ -51,6 +51,8 @@ import {
   confirmEmailVerification,
   confirmPasswordReset,
   createAssignment,
+  createAssignmentShare,
+  addSharedAssignment,
   deleteAccount,
   deleteAssignment,
   extractAssignment,
@@ -66,6 +68,7 @@ import {
   RecordsApiError,
   signup,
   getNotificationPreferences,
+  getSharedAssignment,
   unreadNotificationCount,
   updateNotificationPreferences,
   registerPushSubscription,
@@ -78,6 +81,7 @@ import {
   type Candidate,
   type NotificationPreferences,
   type User,
+  type SharedAssignment,
 } from "./recordsApi";
 import { enableWebPush, isWebPushConfigured, requestWebPushPermission } from "./webPush";
 
@@ -97,6 +101,7 @@ type Task = {
   done: boolean;
   color: string;
 };
+type ShareState = { taskId: string; link: string; busy: boolean; error: string };
 
 type CalendarImagePreset = {
   id: "phone" | "tablet-landscape" | "tablet-portrait";
@@ -178,6 +183,15 @@ function openLoginPage() {
   const query = new URLSearchParams({ screen: "login" });
   if (email) query.set("email", email);
   window.location.assign(`/?${query}`);
+}
+
+function completeAuth(onSuccess: () => void) {
+  const shareToken = new URLSearchParams(window.location.search).get("share");
+  if (shareToken) {
+    window.location.assign(`/shared-assignments/${encodeURIComponent(shareToken)}`);
+    return;
+  }
+  onSuccess();
 }
 
 function loginEmailFromUrl() {
@@ -1096,7 +1110,7 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
       if (mode === "signup") {
         const signedIn = await signupOrResume(name.trim(), email.trim(), studentId.trim(), password);
         if (signedIn) {
-          onSuccess();
+          completeAuth(onSuccess);
           return;
         }
         openEmailVerificationPage(email.trim());
@@ -1104,7 +1118,7 @@ function MobileAuth({ mode, onSuccess, onSwitch }: { mode: AuthMode; onSuccess: 
       } else {
         await login(email.trim(), password);
       }
-      onSuccess();
+      completeAuth(onSuccess);
       if (permissionRequest) void permissionRequest.then((permission) => permission === "granted" ? enableWebPush(registerPushSubscription, permission) : undefined).catch(() => undefined);
     } catch (submitError) {
       if (submitError instanceof RecordsApiError && submitError.code === "EMAIL_NOT_VERIFIED") {
@@ -1221,6 +1235,63 @@ function TaskList({ tasks, selectedDate, onToggle, onEdit }: { tasks: Task[]; se
         )) : <div className="empty-state"><CalendarIcon /><p>이 날짜에는 과제가 없어요.</p></div>}
       </div>
     </section>
+  );
+}
+
+async function copyShareLink(link: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(link);
+    return;
+  }
+  const input = document.createElement("textarea");
+  input.value = link;
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  document.execCommand("copy");
+  input.remove();
+}
+
+function ShareLinkPanel({ taskTitle, link, busy, error, onCreate }: {
+  taskTitle: string;
+  link: string;
+  busy: boolean;
+  error: string;
+  onCreate: () => void;
+}) {
+  const [status, setStatus] = useState("");
+  const canNativeShare = "share" in navigator;
+  const share = async () => {
+    try {
+      if (canNativeShare) await (navigator as Navigator & { share: (data: ShareData) => Promise<void> }).share({ title: taskTitle, text: `${taskTitle} 과제를 Kyelendar에서 확인해 보세요.`, url: link });
+      else await copyShareLink(link);
+      setStatus(canNativeShare ? "공유 창을 열었어요." : "링크를 복사했어요.");
+    } catch (shareError) {
+      if (shareError instanceof DOMException && shareError.name === "AbortError") return;
+      setStatus("공유하지 못했어요. 링크를 복사해 주세요.");
+    }
+  };
+  const copy = async () => {
+    try {
+      await copyShareLink(link);
+      setStatus("링크를 복사했어요.");
+    } catch {
+      setStatus("링크를 복사하지 못했어요.");
+    }
+  };
+  return (
+    <div className="share-panel">
+      <div className="share-panel-heading"><span>과제 공유</span><small>링크를 받은 사람은 자기 과제에 추가할 수 있어요.</small></div>
+      {link ? (
+        <>
+          <input className="share-link-input" value={link} readOnly aria-label="과제 공유 링크" />
+          <div className="share-actions"><button type="button" className="share-secondary-button" onClick={() => void copy()}>링크 복사</button>{canNativeShare ? <button type="button" className="share-primary-button" onClick={() => void share()}>공유하기</button> : null}</div>
+          {status ? <p className="share-status" role="status">{status}</p> : null}
+        </>
+      ) : <button type="button" className="share-primary-button" onClick={onCreate} disabled={busy}>{busy ? "링크 만드는 중..." : "공유 링크 만들기"}</button>}
+      {error ? <p className="auth-error" role="alert">{error}</p> : null}
+    </div>
   );
 }
 
@@ -1389,6 +1460,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
   const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [shareState, setShareState] = useState<ShareState>({ taskId: "", link: "", busy: false, error: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1559,6 +1631,16 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     finally { setBusy(false); }
   };
 
+  const createShareLink = async (taskId: string) => {
+    setShareState({ taskId, link: "", busy: true, error: "" });
+    try {
+      const share = await createAssignmentShare(taskId);
+      setShareState({ taskId, link: `${window.location.origin}/shared-assignments/${share.token}`, busy: false, error: "" });
+    } catch (shareError) {
+      setShareState({ taskId, link: "", busy: false, error: apiErrorMessage(shareError) });
+    }
+  };
+
   return (
     <>
       <MobileScroll className={`app-screen theme-${theme}`}>
@@ -1626,6 +1708,7 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
               <label className="form-field"><span>마감 시간</span><input type="time" value={editingTask.time} onChange={(event) => setEditingTask((task) => task ? { ...task, time: event.target.value } : task)} /></label>
             </div>
             <label className="alarm-toggle"><input type="checkbox" checked={editingTask.notificationsEnabled} onChange={(event) => setEditingTask((task) => task ? { ...task, notificationsEnabled: event.target.checked } : task)} /><BellIcon />마감 알림 받기</label>
+            <ShareLinkPanel taskTitle={editingTask.title} link={shareState.taskId === editingTask.id ? shareState.link : ""} busy={shareState.taskId === editingTask.id && shareState.busy} error={shareState.taskId === editingTask.id ? shareState.error : ""} onCreate={() => void createShareLink(editingTask.id)} />
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
             <button className="assignment-delete-button" type="button" onClick={() => void removeTask()} disabled={busy}>과제 삭제</button>
           </div>
@@ -1698,7 +1781,7 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
       if (mode === "signup") {
         const signedIn = await signupOrResume(name.trim(), email.trim(), studentId.trim(), password);
         if (signedIn) {
-          onSuccess();
+          completeAuth(onSuccess);
           return;
         }
         openEmailVerificationPage(email.trim());
@@ -1706,7 +1789,7 @@ function TabletAuth({ mode, setMode, onSuccess }: { mode: AuthMode; setMode: (mo
       } else {
         await login(email.trim(), password);
       }
-      onSuccess();
+      completeAuth(onSuccess);
       if (permissionRequest) void permissionRequest.then((permission) => permission === "granted" ? enableWebPush(registerPushSubscription, permission) : undefined).catch(() => undefined);
     } catch (submitError) {
       if (submitError instanceof RecordsApiError && submitError.code === "EMAIL_NOT_VERIFIED") {
@@ -1765,6 +1848,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
   const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [shareState, setShareState] = useState<ShareState>({ taskId: "", link: "", busy: false, error: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1923,6 +2007,16 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     } catch (deleteError) { setError(apiErrorMessage(deleteError)); }
     finally { setBusy(false); }
   };
+
+  const createShareLink = async (taskId: string) => {
+    setShareState({ taskId, link: "", busy: true, error: "" });
+    try {
+      const share = await createAssignmentShare(taskId);
+      setShareState({ taskId, link: `${window.location.origin}/shared-assignments/${share.token}`, busy: false, error: "" });
+    } catch (shareError) {
+      setShareState({ taskId, link: "", busy: false, error: apiErrorMessage(shareError) });
+    }
+  };
   return (
     <main className="tablet-dashboard">
       <aside className="tablet-sidebar">
@@ -1994,6 +2088,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
               <label className="form-field"><span>마감 시간</span><input type="time" value={editingTask.time} onChange={(event) => setEditingTask((task) => task ? { ...task, time: event.target.value } : task)} /></label>
             </div>
             <label className="alarm-toggle"><input type="checkbox" checked={editingTask.notificationsEnabled} onChange={(event) => setEditingTask((task) => task ? { ...task, notificationsEnabled: event.target.checked } : task)} /><BellIcon />마감 알림 받기</label>
+            <ShareLinkPanel taskTitle={editingTask.title} link={shareState.taskId === editingTask.id ? shareState.link : ""} busy={shareState.taskId === editingTask.id && shareState.busy} error={shareState.taskId === editingTask.id ? shareState.error : ""} onCreate={() => void createShareLink(editingTask.id)} />
             <button className="save-button" onClick={() => void saveEdit()} disabled={!editingTask.title.trim() || !editingTask.subject.trim() || busy}>{busy ? "처리 중..." : "수정 저장"}</button>
             <button className="assignment-delete-button" type="button" onClick={() => void removeTask()} disabled={busy}>과제 삭제</button>
           </TabletModal>
@@ -2033,11 +2128,78 @@ function TabletWebPrototype() {
   );
 }
 
+function sharedDeadline(assignment: SharedAssignment) {
+  const date = new Date(assignment.dueAt);
+  const dateLabel = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" }).format(date);
+  const timeLabel = assignment.dueTime
+    ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(`2000-01-01T${assignment.dueTime.slice(0, 5)}:00+09:00`))
+    : "시간 미정";
+  return `${dateLabel} · ${timeLabel}`;
+}
+
+function SharedAssignmentPage({ token }: { token: string }) {
+  const [assignment, setAssignment] = useState<SharedAssignment | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
+  const [error, setError] = useState("");
+  const theme = themeFromUrl();
+  const loginUrl = `/?screen=login&share=${encodeURIComponent(token)}`;
+
+  useEffect(() => {
+    let mounted = true;
+    getSharedAssignment(token)
+      .then((result) => { if (mounted) setAssignment(result); })
+      .catch((loadError) => { if (mounted) setError(apiErrorMessage(loadError)); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [token]);
+
+  const addToMyAssignments = async () => {
+    if (!hasToken()) {
+      window.location.assign(loginUrl);
+      return;
+    }
+    setAdding(true);
+    setError("");
+    try {
+      await addSharedAssignment(token);
+      setAdded(true);
+    } catch (addError) {
+      setError(apiErrorMessage(addError));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <div className={`tablet-app theme-${theme}`}>
+      <main className="shared-assignment-page" aria-label="공유된 과제">
+        <Brand />
+        {loading ? <p className="shared-assignment-message">공유 과제를 불러오는 중...</p> : assignment ? (
+          <section className="shared-assignment-card">
+            <p className="section-label">공유된 과제</p>
+            <h1>{assignment.title}</h1>
+            <span className="shared-assignment-subject">{assignment.subject}</span>
+            <p className="shared-assignment-deadline"><ClockIcon /> {sharedDeadline(assignment)}</p>
+            {added ? <p className="shared-assignment-success" role="status">내 과제에 추가했어요.</p> : <button className="save-button" type="button" onClick={() => void addToMyAssignments()} disabled={adding}>{adding ? "추가 중..." : hasToken() ? "내 과제에 추가" : "로그인 후 내 과제에 추가"}</button>}
+            {added ? <button className="share-secondary-button" type="button" onClick={() => window.location.assign("/?screen=dashboard")}>대시보드로 이동</button> : null}
+            {error ? <p className="auth-error" role="alert">{error}</p> : null}
+            {!hasToken() && !added ? <button className="auth-text-button" type="button" onClick={() => window.location.assign(loginUrl)}>로그인하기</button> : null}
+          </section>
+        ) : <section className="shared-assignment-card"><p className="auth-error" role="alert">{error || "공유 과제를 찾을 수 없습니다."}</p></section>}
+      </main>
+    </div>
+  );
+}
+
 export function WebPrototype() {
   const isMobile = useMobileViewport();
   if (window.location.pathname === "/check-email") return <VerificationPendingPage />;
   if (window.location.pathname === "/forgot-password") return <AuthLinkPage kind="forgot" />;
   if (window.location.pathname === "/reset-password") return <AuthLinkPage kind="reset" />;
+  const sharedMatch = window.location.pathname.match(/^\/shared-assignments\/([^/]+)$/);
+  if (sharedMatch) return <SharedAssignmentPage token={decodeURIComponent(sharedMatch[1])} />;
   const app = isMobile
     ? <MobileRuntime><Prototype /></MobileRuntime>
     : <TabletWebPrototype />;

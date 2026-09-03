@@ -439,6 +439,62 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.locator('input[type="file"][accept="image/*"]')).toHaveCount(1);
 });
 
+test("assignment share links can be created and added from the shared page", async ({ page }) => {
+  const sharedAssignment = {
+    id: "assignment-1",
+    title: "공유 수학 과제",
+    subject: "수학",
+    dueAt: new Date().toISOString(),
+    dueTime: "18:00:00",
+    notificationsEnabled: true,
+    completed: false,
+    completedAt: null,
+    dayOffset: 0,
+    deadlineLabel: "D-Day",
+    startDate: null,
+  };
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/users/me") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
+      return;
+    }
+    if (url.pathname === "/assignments" && request.method() === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [sharedAssignment] }) });
+      return;
+    }
+    if (url.pathname === "/assignments/assignment-1/share" && request.method() === "POST") {
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: { token: "share-token", expiresAt: "2030-10-01T00:00:00Z" } }) });
+      return;
+    }
+    if (url.pathname === "/shared-assignments/share-token" && request.method() === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { ...sharedAssignment, expiresAt: "2030-10-01T00:00:00Z" } }) });
+      return;
+    }
+    if (url.pathname === "/shared-assignments/share-token/add" && request.method() === "POST") {
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: sharedAssignment }) });
+      return;
+    }
+    if (url.pathname.startsWith("/notifications")) {
+      const data = url.pathname.endsWith("unread-count") ? { count: 0 } : url.pathname.endsWith("preferences") ? { beforeDeadlineMinutes: 60 } : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => localStorage.setItem("records-access-token", "test-access"));
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/?screen=dashboard&theme=light");
+  await page.getByRole("button", { name: "공유 수학 과제 수정" }).click();
+  await page.getByRole("button", { name: "공유 링크 만들기" }).click();
+  await expect(page.getByRole("textbox", { name: "과제 공유 링크" })).toHaveValue(/\/shared-assignments\/share-token$/);
+  await page.goto("/shared-assignments/share-token");
+  await expect(page.getByRole("heading", { name: "공유 수학 과제" })).toBeVisible();
+  await page.getByRole("button", { name: "내 과제에 추가" }).click();
+  await expect(page.getByText("내 과제에 추가했어요.", { exact: true })).toBeVisible();
+});
+
 test("expired access token redirects to login on tablet and mobile", async ({ page }) => {
   await page.route("**/users/me", (route) => route.fulfill({
     status: 401,
