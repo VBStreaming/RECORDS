@@ -16,7 +16,6 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   CalendarIcon,
   BellIcon,
-  CameraIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -49,6 +48,7 @@ import {
   clearToken,
   changePassword,
   completeAssignment,
+  createAssignmentsBatch,
   confirmEmailVerification,
   confirmPasswordReset,
   createAssignment,
@@ -1225,26 +1225,80 @@ function TaskList({ tasks, selectedDate, onToggle, onEdit }: { tasks: Task[]; se
   );
 }
 
-function PhotoPicker({ file, onRequestSelect, onRequestCamera }: { file: File | null; onRequestSelect: () => void; onRequestCamera: () => void }) {
-  const [sourceOpen, setSourceOpen] = useState(false);
+type ReviewField = "title" | "subject" | "dueDate" | "dueTime";
+type ReviewedFields = Record<string, ReviewField[]>;
+type ImageAnalysisStatus = "selected" | "uploading" | "analyzing" | "completed" | "no-assignments" | "failed";
+type AssignmentDraft = Candidate & {
+  clientAssignmentId: string;
+  sourceImageId: string;
+  sourceImageOrder: number;
+  selected: boolean;
+  reminderEnabled: boolean;
+};
+type SelectedImage = {
+  clientImageId: string;
+  file: File;
+  previewUrl: string;
+  order: number;
+  status: ImageAnalysisStatus;
+  assignments: AssignmentDraft[];
+  errorMessage: string | null;
+};
+type ReviewForm = {
+  title: string;
+  subject: string;
+  startDate: string;
+  dueDate: string;
+  dueTime: string;
+  reminderEnabled: boolean;
+};
+type FormField = keyof ReviewForm;
+
+function clientId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function emptyReviewForm(date: string): ReviewForm {
+  return { title: "", subject: "", startDate: "", dueDate: date, dueTime: "18:00", reminderEnabled: true };
+}
+
+function fileFingerprint(file: File) {
+  return [file.name, file.size, file.lastModified, file.type].join(":");
+}
+
+function PhotoPicker({ images, onRequestSelect, onRemove, onRetry, busy }: {
+  images: SelectedImage[];
+  onRequestSelect: (replace?: boolean) => void;
+  onRemove: (imageId: string) => void;
+  onRetry: (imageId: string) => void;
+  busy: boolean;
+}) {
   return (
-    <div className={`photo-field ${sourceOpen ? "source-open" : ""}`}>
-      <button type="button" className="photo-picker-trigger" onClick={() => setSourceOpen((open) => !open)} aria-expanded={sourceOpen}>
-        <ImageIcon /><span>{file?.name || "칠판 또는 유인물 사진 선택"}</span>
+    <div className="photo-field">
+      <button type="button" className="photo-picker-trigger" onClick={() => onRequestSelect(false)} disabled={busy}>
+        <ImageIcon /><span>{images.length ? "사진 추가" : "칠판 또는 유인물 사진 선택"}</span>
+        <small>{images.length ? `현재 ${images.length}장 · 운영체제 사진 선택기에서 추가하세요.` : "운영체제 사진 선택기에서 사진을 선택하세요."}</small>
       </button>
-      {sourceOpen ? <div className="photo-source-options" role="group" aria-label="사진 가져오기 방법">
-        <button type="button" onClick={onRequestCamera}><CameraIcon />카메라 촬영</button>
-        <button type="button" onClick={onRequestSelect}><ImageIcon />갤러리 선택</button>
+      {images.length ? <button type="button" className="photo-reselect" onClick={() => onRequestSelect(true)} disabled={busy}>전체 사진 다시 선택</button> : null}
+      {images.length ? <div className="selected-image-list" aria-label="선택한 사진 목록">
+        {images.map((image) => (
+          <div className="selected-image" key={image.clientImageId}>
+            <img src={image.previewUrl} alt={`${image.order + 1}번 선택 사진`} />
+            <span className="selected-image-meta">
+              <strong>사진 {image.order + 1}</strong>
+              <small>{image.status === "selected" ? "분석 대기" : image.status === "uploading" ? "업로드 중" : image.status === "analyzing" ? "분석 중" : image.status === "completed" ? `과제 ${image.assignments.length}개` : image.status === "no-assignments" ? "과제 없음" : "분석 실패"}</small>
+            </span>
+            {image.status === "failed" ? <button type="button" className="image-retry" onClick={() => onRetry(image.clientImageId)} disabled={busy} aria-label={`사진 ${image.order + 1} 다시 분석`}>다시 분석</button> : null}
+            <button type="button" className="image-delete" onClick={() => onRemove(image.clientImageId)} disabled={busy} aria-label={`사진 ${image.order + 1} 삭제`}><Cross2Icon /></button>
+          </div>
+        ))}
       </div> : null}
     </div>
   );
 }
 
-type ReviewField = "title" | "subject" | "dueDate" | "dueTime";
-type ReviewedFields = Record<string, ReviewField[]>;
-
-function candidateReviewKey(candidate: Candidate, index: number) {
-  return candidate.assignmentId || `candidate-${index}`;
+function candidateReviewKey(candidate: Candidate | AssignmentDraft, index: number) {
+  return ("clientAssignmentId" in candidate ? candidate.clientAssignmentId : undefined) || candidate.assignmentId || `candidate-${index}`;
 }
 
 function candidateReviewFields(candidate: Candidate): ReviewField[] {
@@ -1263,27 +1317,53 @@ function candidateReviewFields(candidate: Candidate): ReviewField[] {
   return [...fields];
 }
 
+function candidateNeedsReview(candidate: Candidate) {
+  return candidate.needsReview === true || Array.isArray(candidate.needsReview) && candidate.needsReview.length > 0;
+}
+
 function unreviewedCandidateFields(candidate: Candidate | undefined, index: number, reviewedFields: ReviewedFields) {
   if (!candidate) return [];
   const reviewed = reviewedFields[candidateReviewKey(candidate, index)] || [];
   return candidateReviewFields(candidate).filter((field) => !reviewed.includes(field));
 }
 
-function AnalysisReview({ candidates, selected, warnings, reviewRequired, onSelect, onDelete }: { candidates: Candidate[]; selected: number; warnings: string[]; reviewRequired: boolean; onSelect: (candidate: Candidate, index: number) => void; onDelete: (index: number) => void }) {
-  if (!candidates.length && !warnings.length) return null;
+function AnalysisReview({ images, assignments, selectedId, warnings, reviewRequired, onSelect, onToggle, onToggleAll, onDelete }: {
+  images: SelectedImage[];
+  assignments: AssignmentDraft[];
+  selectedId: string | null;
+  warnings: string[];
+  reviewRequired: boolean;
+  onSelect: (assignmentId: string) => void;
+  onToggle: (assignmentId: string) => void;
+  onToggleAll: () => void;
+  onDelete: (assignmentId: string) => void;
+}) {
+  if (!images.length && !assignments.length && !warnings.length) return null;
+  const completedImages = images.filter((image) => ["completed", "no-assignments"].includes(image.status)).length;
+  const failedImages = images.filter((image) => image.status === "failed").length;
+  const allSelected = assignments.length > 0 && assignments.every((assignment) => assignment.selected);
+  const noAssignments = images.length > 0 && !assignments.length && images.every((image) => image.status === "no-assignments");
   return (
     <div className="analysis-review" role="status">
-      {candidates.length ? (
-        <div className="candidate-list" aria-label="AI 분석 후보">
-          {candidates.map((candidate, index) => (
-            <div className="candidate-item" key={`${candidate.title}-${index}`}>
-              <button type="button" className={`candidate-option ${index === selected ? "active" : ""}`} onClick={() => onSelect(candidate, index)}>
-                {index + 1}. {candidate.title || "제목 확인 필요"}
+      {images.length ? <p className="analysis-progress">사진 {completedImages}/{images.length}장 분석 완료 · 과제 {assignments.length}개 · 선택 {assignments.filter((assignment) => assignment.selected).length}개</p> : null}
+      {failedImages ? <p>사진 {failedImages}장은 분석하지 못했어요. 사진별 다시 분석을 눌러 주세요.</p> : null}
+      {noAssignments ? <p>사진에서 과제를 찾지 못했어요. 다른 사진을 추가하거나 직접 입력해 주세요.</p> : null}
+      {assignments.length ? (
+        <>
+          <label className="candidate-select-all"><input type="checkbox" checked={allSelected} onChange={onToggleAll} />전체 선택</label>
+          <div className="candidate-list" aria-label="AI 분석 후보">
+          {assignments.map((assignment, index) => (
+            <div className="candidate-item" key={assignment.clientAssignmentId}>
+              <input className="candidate-select" type="checkbox" checked={assignment.selected} onChange={() => onToggle(assignment.clientAssignmentId)} aria-label={`${index + 1}번 후보 저장`} />
+              <button type="button" className={`candidate-option ${assignment.clientAssignmentId === selectedId ? "active" : ""}`} onClick={() => onSelect(assignment.clientAssignmentId)}>
+                <span>{index + 1}. {assignment.title || "제목 확인 필요"}</span>
+                <small>사진 {assignment.sourceImageOrder + 1} · {assignment.subject || "과목 확인 필요"}{candidateNeedsReview(assignment) ? " · 확인 필요" : ""}{assignment.possibleDuplicateOf ? " · 중복 가능성" : ""}</small>
               </button>
-              <button type="button" className="candidate-delete" onClick={() => onDelete(index)} aria-label={`${index + 1}번 후보 삭제`}><Cross2Icon /></button>
+              <button type="button" className="candidate-delete" onClick={() => onDelete(assignment.clientAssignmentId)} aria-label={`${index + 1}번 후보 삭제`}><Cross2Icon /></button>
             </div>
           ))}
-        </div>
+          </div>
+        </>
       ) : null}
       {reviewRequired ? <p>주황색 입력값을 직접 확인해 주세요.</p> : null}
       {warnings.map((warning) => <p key={warning}>{warning}</p>)}
@@ -1308,6 +1388,278 @@ function candidateDueAt(candidate: Candidate) {
     date: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date),
     time: new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(date),
   };
+}
+
+function markPossibleDuplicates(assignments: AssignmentDraft[]) {
+  // ponytail: exact normalized fields only; add fuzzy matching after duplicate reports justify it.
+  const groups = new Map<string, AssignmentDraft[]>();
+  assignments.forEach((assignment) => {
+    const key = [assignment.title, assignment.subject, assignment.dueDate].map((value) => value?.replace(/\s+/g, "").toLocaleLowerCase()).join("|");
+    if (assignment.title && assignment.subject && assignment.dueDate) groups.set(key, [...(groups.get(key) || []), assignment]);
+  });
+  const duplicateIds = new Map<string, string>();
+  groups.forEach((group) => {
+    if (group.length < 2 || new Set(group.map((assignment) => assignment.sourceImageId)).size < 2) return;
+    group.forEach((assignment) => {
+      const other = group.find((candidate) => candidate.clientAssignmentId !== assignment.clientAssignmentId);
+      if (other) duplicateIds.set(assignment.clientAssignmentId, other.clientAssignmentId);
+    });
+  });
+  return assignments.map((assignment) => ({ ...assignment, possibleDuplicateOf: assignment.possibleDuplicateOf || duplicateIds.get(assignment.clientAssignmentId) || null }));
+}
+
+function useExtractionReview(defaultDate: string) {
+  const [images, setImages] = useState<SelectedImage[]>([]);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
+  const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [manualForm, setManualForm] = useState(() => emptyReviewForm(defaultDate));
+  const [manualStartDateExpanded, setManualStartDateExpanded] = useState(false);
+  const [startDateExpanded, setStartDateExpanded] = useState<Record<string, boolean>>({});
+  const [extractionBatchId] = useState(clientId);
+  const imagesRef = useRef<SelectedImage[]>([]);
+
+  useEffect(() => { imagesRef.current = images; }, [images]);
+  useEffect(() => () => imagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl)), []);
+
+  const assignments = useMemo(() => markPossibleDuplicates(images.flatMap((image) => image.assignments).sort((a, b) => a.sourceImageOrder - b.sourceImageOrder || a.sourceOrder - b.sourceOrder)), [images]);
+  const selectedAssignment = assignments.find((assignment) => assignment.clientAssignmentId === selectedAssignmentId) || null;
+  const selectedIndex = selectedAssignment ? assignments.indexOf(selectedAssignment) : -1;
+  const form: ReviewForm = selectedAssignment ? {
+    title: selectedAssignment.title || "",
+    subject: selectedAssignment.subject || "",
+    startDate: selectedAssignment.startDate || "",
+    dueDate: candidateDueAt(selectedAssignment)?.date || "",
+    dueTime: candidateDueAt(selectedAssignment)?.time || "",
+    reminderEnabled: selectedAssignment.reminderEnabled,
+  } : manualForm;
+  const pendingImageCount = images.filter((image) => image.status === "selected" || image.status === "failed").length;
+  const selectedCount = assignments.filter((assignment) => assignment.selected).length;
+  const reviewRequiredFields = selectedAssignment ? unreviewedCandidateFields(selectedAssignment, selectedIndex, reviewedFields) : [];
+  const reviewRequired = reviewRequiredFields.length > 0;
+  const isStartDateExpanded = selectedAssignment ? Boolean(selectedAssignment.startDate || startDateExpanded[selectedAssignment.clientAssignmentId]) : manualStartDateExpanded;
+
+  const addFiles = (files: File[]) => {
+    const known = new Set(images.map((image) => fileFingerprint(image.file)));
+    let duplicateCount = 0;
+    const additions = files.filter((file) => {
+      if (!file.type.startsWith("image/")) return false;
+      const key = fileFingerprint(file);
+      if (known.has(key)) { duplicateCount += 1; return false; }
+      known.add(key);
+      return true;
+    }).map((file, index) => ({
+      clientImageId: clientId(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      order: index,
+      status: "selected" as const,
+      assignments: [],
+      errorMessage: null,
+    }));
+    if (additions.length) setImages((current) => {
+      const nextOrder = current.reduce((max, image) => Math.max(max, image.order), -1) + 1;
+      return [...current, ...additions.map((image, index) => ({ ...image, order: nextOrder + index }))];
+    });
+    return { addedCount: additions.length, duplicateCount };
+  };
+
+  const replaceFiles = (files: File[]) => {
+    const nextFiles: File[] = [];
+    const known = new Set<string>();
+    let duplicateCount = 0;
+    files.forEach((file) => {
+      if (!file.type.startsWith("image/")) return;
+      const key = fileFingerprint(file);
+      if (known.has(key)) { duplicateCount += 1; return; }
+      known.add(key);
+      nextFiles.push(file);
+    });
+    if (!nextFiles.length) return { addedCount: 0, duplicateCount };
+    images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+    setImages(nextFiles.map((file, order) => ({
+      clientImageId: clientId(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      order,
+      status: "selected" as const,
+      assignments: [],
+      errorMessage: null,
+    })));
+    setSelectedAssignmentId(null);
+    setReviewedFields({});
+    return { addedCount: nextFiles.length, duplicateCount };
+  };
+
+  const removeImage = (imageId: string) => {
+    const image = images.find((candidate) => candidate.clientImageId === imageId);
+    if (image) URL.revokeObjectURL(image.previewUrl);
+    const remaining = assignments.filter((assignment) => assignment.sourceImageId !== imageId);
+    setImages((current) => current.filter((candidate) => candidate.clientImageId !== imageId));
+    setSelectedAssignmentId((current) => current && remaining.some((assignment) => assignment.clientAssignmentId === current) ? current : remaining.at(0)?.clientAssignmentId || null);
+  };
+
+  const removeAssignment = (assignmentId: string) => {
+    const remaining = assignments.filter((assignment) => assignment.clientAssignmentId !== assignmentId);
+    setImages((current) => current.map((image) => ({ ...image, assignments: image.assignments.filter((assignment) => assignment.clientAssignmentId !== assignmentId) })));
+    setSelectedAssignmentId((current) => current === assignmentId ? remaining.at(0)?.clientAssignmentId || null : current);
+  };
+
+  const updateAssignment = (assignmentId: string, patch: Partial<AssignmentDraft>) => {
+    setImages((current) => current.map((image) => ({ ...image, assignments: image.assignments.map((assignment) => assignment.clientAssignmentId === assignmentId ? { ...assignment, ...patch } : assignment) })));
+  };
+
+  const toggleAssignment = (assignmentId: string) => {
+    const assignment = assignments.find((candidate) => candidate.clientAssignmentId === assignmentId);
+    if (assignment) updateAssignment(assignmentId, { selected: !assignment.selected });
+  };
+
+  const toggleAllAssignments = () => {
+    const selected = assignments.length > 0 && assignments.every((assignment) => assignment.selected);
+    setImages((current) => current.map((image) => ({ ...image, assignments: image.assignments.map((assignment) => ({ ...assignment, selected: !selected })) })));
+  };
+
+  const setField = (field: FormField, value: string | boolean) => {
+    if (selectedAssignment) {
+      const patch = field === "reminderEnabled" ? { reminderEnabled: Boolean(value) } : field === "startDate" ? { startDate: value ? String(value) : null } : field === "dueDate" ? { dueDate: String(value), dueAt: null } : field === "dueTime" ? { dueTime: String(value), dueAt: null } : { [field]: String(value) };
+      updateAssignment(selectedAssignment.clientAssignmentId, patch);
+      if (field === "title" || field === "subject" || field === "dueDate" || field === "dueTime") markFieldReviewed(field, String(value));
+      return;
+    }
+    setManualForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const markFieldReviewed = (field: ReviewField, value: string) => {
+    if (!value.trim() || !selectedAssignment) return;
+    const key = selectedAssignment.clientAssignmentId;
+    setReviewedFields((current) => current[key]?.includes(field) ? current : { ...current, [key]: [...(current[key] || []), field] });
+  };
+
+  const resetManual = (date = defaultDate) => {
+    setManualForm(emptyReviewForm(date));
+    setManualStartDateExpanded(false);
+  };
+
+  const toggleStartDate = () => {
+    if (selectedAssignment) {
+      setStartDateExpanded((current) => ({ ...current, [selectedAssignment.clientAssignmentId]: true }));
+      if (!selectedAssignment.startDate) updateAssignment(selectedAssignment.clientAssignmentId, { startDate: null });
+    } else setManualStartDateExpanded(true);
+  };
+
+  const removeStartDate = () => {
+    if (selectedAssignment) {
+      setStartDateExpanded((current) => ({ ...current, [selectedAssignment.clientAssignmentId]: false }));
+      updateAssignment(selectedAssignment.clientAssignmentId, { startDate: null });
+    } else {
+      setManualStartDateExpanded(false);
+      setManualForm((current) => ({ ...current, startDate: "" }));
+    }
+  };
+
+  const analyzeImages = useCallback(async (imageIds?: string[]) => {
+    if (busy) return;
+    const target = images.filter((image) => imageIds?.includes(image.clientImageId) || (!imageIds && (image.status === "selected" || image.status === "failed")));
+    if (!target.length) return;
+    setBusy(true);
+    let hasSelected = Boolean(selectedAssignmentId || assignments.length);
+    try {
+      for (const image of target) {
+        setImages((current) => current.map((candidate) => candidate.clientImageId === image.clientImageId ? { ...candidate, status: "uploading", errorMessage: null } : candidate));
+        try {
+          setImages((current) => current.map((candidate) => candidate.clientImageId === image.clientImageId ? { ...candidate, status: "analyzing" } : candidate));
+          const extraction = await extractAssignment(image.file, { extractionBatchId, imageId: image.clientImageId, imageIndex: image.order });
+          const extracted = extractionCandidates(extraction).map((candidate) => ({
+            ...candidate,
+            clientAssignmentId: clientId(),
+            sourceImageId: image.clientImageId,
+            sourceImageOrder: image.order,
+            selected: true,
+            reminderEnabled: true,
+          }));
+          setImages((current) => current.map((candidate) => candidate.clientImageId === image.clientImageId ? { ...candidate, status: extracted.length ? "completed" : "no-assignments", assignments: extracted, errorMessage: null } : candidate));
+          setWarnings((current) => [...current, ...(extraction.warnings || [])]);
+          if (!hasSelected) {
+            const first = extracted.at(0);
+            if (first) {
+              setSelectedAssignmentId(first.clientAssignmentId);
+              hasSelected = true;
+            }
+          }
+        } catch (analysisError) {
+          setImages((current) => current.map((candidate) => candidate.clientImageId === image.clientImageId ? { ...candidate, status: "failed", errorMessage: apiErrorMessage(analysisError) } : candidate));
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [assignments.length, busy, extractionBatchId, images, selectedAssignmentId]);
+
+  const removeSavedAssignments = (savedIds: string[]) => {
+    const saved = new Set(savedIds);
+    const remaining = assignments.filter((assignment) => !saved.has(assignment.clientAssignmentId));
+    setImages((current) => current.map((image) => ({ ...image, assignments: image.assignments.filter((assignment) => !saved.has(assignment.clientAssignmentId)) })));
+    setSelectedAssignmentId(remaining.at(0)?.clientAssignmentId || null);
+    if (!remaining.length) resetManual(defaultDate);
+  };
+
+  return {
+    images,
+    assignments,
+    selectedAssignment,
+    selectedAssignmentId,
+    form,
+    warnings,
+    busy,
+    pendingImageCount,
+    selectedCount,
+    reviewRequired,
+    reviewRequiredFields,
+    isStartDateExpanded,
+    extractionBatchId,
+    addFiles,
+    replaceFiles,
+    removeImage,
+    removeAssignment,
+    selectAssignment: setSelectedAssignmentId,
+    toggleAssignment,
+    toggleAllAssignments,
+    setField,
+    toggleStartDate,
+    removeStartDate,
+    analyzeImages,
+    removeSavedAssignments,
+    resetManual,
+  };
+}
+
+function AssignmentReviewForm({ form, reviewRequiredFields, isStartDateExpanded, saveLabel, saveDisabled, busy, onFieldChange, onAddStartDate, onRemoveStartDate, onSave }: {
+  form: ReviewForm;
+  reviewRequiredFields: ReviewField[];
+  isStartDateExpanded: boolean;
+  saveLabel: string;
+  saveDisabled: boolean;
+  busy: boolean;
+  onFieldChange: (field: FormField, value: string | boolean) => void;
+  onAddStartDate: () => void;
+  onRemoveStartDate: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <>
+      <label className={`form-field ${reviewRequiredFields.includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={form.title} onChange={(event) => onFieldChange("title", event.target.value)} placeholder="과제명을 입력하세요" /></label>
+      <label className={`form-field ${reviewRequiredFields.includes("subject") ? "review-needed" : ""}`}><span>과목</span><input value={form.subject} onChange={(event) => onFieldChange("subject", event.target.value)} placeholder="과목 또는 분류를 입력하세요" /></label>
+      {isStartDateExpanded ? <label className="form-field"><span>시작일</span><input type="date" value={form.startDate} max={form.dueDate || undefined} onChange={(event) => onFieldChange("startDate", event.target.value)} /></label> : <button type="button" className="start-date-toggle" onClick={onAddStartDate}>+ 시작일 추가</button>}
+      {isStartDateExpanded ? <button type="button" className="start-date-remove" onClick={onRemoveStartDate}>시작일 삭제</button> : null}
+      <div className="form-row">
+        <label className={`form-field ${reviewRequiredFields.includes("dueDate") ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={form.dueDate} onChange={(event) => onFieldChange("dueDate", event.target.value)} /></label>
+        <label className={`form-field ${reviewRequiredFields.includes("dueTime") ? "review-needed" : ""}`}><span>마감 시간</span><input type="time" value={form.dueTime} onChange={(event) => onFieldChange("dueTime", event.target.value)} /></label>
+      </div>
+      <label className="alarm-toggle"><input type="checkbox" checked={form.reminderEnabled} onChange={(event) => onFieldChange("reminderEnabled", event.target.checked)} /><BellIcon />마감 알림 받기</label>
+      <button className="save-button" onClick={onSave} disabled={saveDisabled}>{busy ? "처리 중..." : saveLabel}</button>
+    </>
+  );
 }
 
 function useAuthExpiredRedirect() {
@@ -1384,26 +1736,15 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
-  const [title, setTitle] = useState("");
-  const [subject, setSubject] = useState("");
-  const [dueDate, setDueDate] = useState(todayInSeoul);
-  const [dueTime, setDueTime] = useState("18:00");
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [file, setFile] = useState<File | null>(null);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [selectedCandidate, setSelectedCandidate] = useState(0);
-  const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
-  const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const openPhotoInput = (capture: boolean) => {
-    const input = photoInputRef.current;
-    if (!input) return;
-    if (capture) input.setAttribute("capture", "environment");
-    else input.removeAttribute("capture");
-    input.click();
+  const photoSelectionModeRef = useRef<"append" | "replace">("append");
+  const review = useExtractionReview(todayInSeoul());
+  const openPhotoInput = (replace = false) => {
+    photoSelectionModeRef.current = replace ? "replace" : "append";
+    photoInputRef.current?.click();
   };
   const calendar = useCalendar(tasks);
   const activeCount = tasks.filter((task) => !task.done).length;
@@ -1445,84 +1786,41 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
     return () => { mounted = false; };
   }, [calendar.year, calendar.month, online]);
 
-  const applyCandidate = (candidate: Candidate, index: number) => {
-    const extractedDueAt = candidateDueAt(candidate);
-    setSelectedCandidate(index);
-    setTitle(candidate.title || "");
-    setSubject(candidate.subject || "");
-    setDueDate(extractedDueAt?.date || "");
-    if (extractedDueAt) setDueTime(extractedDueAt.time);
-  };
-
-  const markFieldReviewed = (field: ReviewField, value: string) => {
-    if (!value.trim() || !candidates[selectedCandidate]) return;
-    const key = candidateReviewKey(candidates[selectedCandidate], selectedCandidate);
-    setReviewedFields((current) => current[key]?.includes(field) ? current : { ...current, [key]: [...(current[key] || []), field] });
-  };
-
-  const removeCandidate = (index: number) => {
-    const remaining = candidates.filter((_, candidateIndex) => candidateIndex !== index);
-    const nextIndex = index < selectedCandidate
-      ? selectedCandidate - 1
-      : Math.min(selectedCandidate, Math.max(remaining.length - 1, 0));
-    setCandidates(remaining);
-    setSelectedCandidate(remaining.length ? nextIndex : 0);
-    if (index === selectedCandidate && remaining.length) applyCandidate(remaining[nextIndex], nextIndex);
-    if (!remaining.length) {
-      setTitle("");
-      setSubject("");
-      setDueDate(calendar.selectedDate);
-      setDueTime("18:00");
-    }
-  };
-
-  const analyzePhoto = async (selectedFile: File) => {
-    setBusy(true);
-    setError("");
-    try {
-      const extraction = await extractAssignment(selectedFile);
-      const extractedCandidates = extractionCandidates(extraction);
-      const candidate = extractedCandidates[0];
-      if (!candidate) throw new Error("사진에서 과제를 찾지 못했습니다.");
-      setCandidates(extractedCandidates);
-      setReviewedFields({});
-      setAnalysisWarnings(extraction.warnings || []);
-      applyCandidate(candidate, 0);
-    } catch (analysisError) {
-      setError(apiErrorMessage(analysisError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const addTask = async () => {
-    if (!title.trim() || !subject.trim() || !dueDate) return;
+    const currentForm = review.form;
+    const selectedAssignments = review.assignments.filter((assignment) => assignment.selected);
+    if (review.assignments.length) {
+      if (!selectedAssignments.length) { setError("저장할 과제를 선택해 주세요."); return; }
+      if (selectedAssignments.some((assignment) => !assignment.title?.trim() || !assignment.subject?.trim() || !assignment.dueDate || Boolean(assignment.startDate && assignment.dueDate && assignment.startDate > assignment.dueDate))) {
+        setError("선택한 과제의 제목, 과목, 마감일과 기간을 확인해 주세요.");
+        return;
+      }
+    } else if (!currentForm.title.trim() || !currentForm.subject.trim() || !currentForm.dueDate || Boolean(currentForm.startDate && currentForm.dueDate && currentForm.startDate > currentForm.dueDate)) return;
     setBusy(true);
     setError("");
     try {
-      const created = await createAssignment(title.trim(), subject, dueAt(dueDate, dueTime), notificationsEnabled);
-      const createdTask = taskFromAssignment(created);
-      setTasks((current) => [...current, createdTask]);
-      calendar.selectDate(createdTask.date);
-      if (candidates.length) {
-        const remaining = candidates.filter((_, candidateIndex) => candidateIndex !== selectedCandidate);
-        const nextIndex = Math.min(selectedCandidate, Math.max(remaining.length - 1, 0));
-        setCandidates(remaining);
-        setSelectedCandidate(remaining.length ? nextIndex : 0);
-        if (remaining.length) {
-          applyCandidate(remaining[nextIndex], nextIndex);
-        } else {
-          setTitle("");
-          setSubject("");
-          setDueDate(calendar.selectedDate);
-          setDueTime("18:00");
-        }
+      if (review.assignments.length) {
+        const created = await createAssignmentsBatch(review.extractionBatchId, selectedAssignments.map((assignment) => ({
+          clientAssignmentId: assignment.clientAssignmentId,
+          sourceImageId: assignment.sourceImageId,
+          title: assignment.title!.trim(),
+          subject: assignment.subject!.trim(),
+          startDate: assignment.startDate,
+          dueDate: assignment.dueDate!,
+          dueTime: assignment.dueTime,
+          reminderEnabled: assignment.reminderEnabled,
+        })));
+        setTasks((current) => [...current, ...created.map(taskFromAssignment)]);
+        calendar.selectDate(created.at(-1) ? taskFromAssignment(created.at(-1)!).date : calendar.selectedDate);
+        const remaining = review.assignments.filter((assignment) => !assignment.selected);
+        review.removeSavedAssignments(selectedAssignments.map((assignment) => assignment.clientAssignmentId));
+        if (!remaining.length) setSheetOpen(false);
       } else {
-        setTitle("");
-        setFile(null);
-        setNotificationsEnabled(true);
-        setCandidates([]);
-        setAnalysisWarnings([]);
+        const created = await createAssignment(currentForm.title.trim(), currentForm.subject.trim(), dueAt(currentForm.dueDate, currentForm.dueTime || "23:59"), currentForm.reminderEnabled, currentForm.startDate || null);
+        const createdTask = taskFromAssignment(created);
+        setTasks((current) => [...current, createdTask]);
+        calendar.selectDate(createdTask.date);
+        review.resetManual(calendar.selectedDate);
         setSheetOpen(false);
       }
     } catch (saveError) {
@@ -1597,34 +1895,24 @@ function MobileDashboard({ onLogout }: { onLogout: () => void }) {
       </AnimatePresence>
       {portalReady && screenRef.current && !editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen && !logoutConfirmOpen ? createPortal(
         <nav className="action-bar" aria-label="과제 추가">
-          <button className="photo-button" onClick={() => { setDueDate(calendar.selectedDate); setSheetOpen(true); }}><PlusIcon /> 과제 추가</button>
+          <button className="photo-button" onClick={() => { review.resetManual(calendar.selectedDate); setSheetOpen(true); }}><PlusIcon /> 과제 추가</button>
         </nav>, screenRef.current,
       ) : null}
-      <input ref={photoInputRef} hidden type="file" accept="image/*" onChange={(event) => {
-        const selectedFile = event.currentTarget.files?.[0];
+      <input ref={photoInputRef} hidden type="file" accept="image/*" multiple onChange={(event) => {
+        const selectedFiles = Array.from(event.currentTarget.files ?? []);
         event.currentTarget.value = "";
-        if (!selectedFile) return;
-        setFile(selectedFile);
-        setCandidates([]);
-        setReviewedFields({});
-        setAnalysisWarnings([]);
-        setDueDate(calendar.selectedDate);
+        if (!selectedFiles.length) return;
+        const result = photoSelectionModeRef.current === "replace" ? review.replaceFiles(selectedFiles) : review.addFiles(selectedFiles);
+        if (result.duplicateCount) setError("이미 추가된 사진은 제외했어요.");
         setSheetOpen(true);
       }} />
-      <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen} title="새 과제 추가" description="사진 한 장과 필수 정보만 빠르게 기록해요." snap={0.86}>
+      <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen} title="새 과제 추가" description="사진과 필수 정보를 확인해 한 번에 기록해요." snap={0.86}>
         <div className="add-form">
-          <PhotoPicker file={file} onRequestSelect={() => openPhotoInput(false)} onRequestCamera={() => openPhotoInput(true)} />
-          {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
-          <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} reviewRequired={unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).length > 0} onSelect={applyCandidate} onDelete={removeCandidate} />
+          <PhotoPicker images={review.images} onRequestSelect={openPhotoInput} onRemove={review.removeImage} onRetry={(imageId) => void review.analyzeImages([imageId])} busy={busy || review.busy} />
+          {review.pendingImageCount ? <button type="button" className="analyze-button" onClick={() => void review.analyzeImages()} disabled={busy || review.busy}>{review.busy ? "분석 중..." : `사진 분석 (${review.pendingImageCount}장)`}</button> : null}
+          <AnalysisReview images={review.images} assignments={review.assignments} selectedId={review.selectedAssignmentId} warnings={review.warnings} reviewRequired={review.reviewRequired} onSelect={review.selectAssignment} onToggle={review.toggleAssignment} onToggleAll={review.toggleAllAssignments} onDelete={review.removeAssignment} />
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
-          <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => { setTitle(event.target.value); markFieldReviewed("title", event.target.value); }} placeholder="과제명을 입력하세요" /></label>
-          <div className="form-row">
-            <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("subject") ? "review-needed" : ""}`}><span>과목</span><input value={subject} onChange={(event) => { setSubject(event.target.value); markFieldReviewed("subject", event.target.value); }} placeholder="과목 또는 분류를 입력하세요" /></label>
-            <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("dueDate") ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={dueDate} onChange={(event) => { setDueDate(event.target.value); markFieldReviewed("dueDate", event.target.value); }} /></label>
-          </div>
-          <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("dueTime") ? "review-needed" : ""}`}><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => { setDueTime(event.target.value); markFieldReviewed("dueTime", event.target.value); }} /></label>
-          <label className="alarm-toggle"><input type="checkbox" checked={notificationsEnabled} onChange={(event) => setNotificationsEnabled(event.target.checked)} /><BellIcon />마감 알림 받기</label>
-          <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || !dueDate || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
+          <AssignmentReviewForm form={review.form} reviewRequiredFields={review.reviewRequiredFields} isStartDateExpanded={review.isStartDateExpanded} saveLabel={review.assignments.length ? `선택한 ${review.selectedCount}개 과제 저장` : "과제 저장"} saveDisabled={busy || review.busy || review.assignments.length ? review.selectedCount === 0 || review.assignments.filter((assignment) => assignment.selected).some((assignment) => !assignment.title?.trim() || !assignment.subject?.trim() || !assignment.dueDate || Boolean(assignment.startDate && assignment.dueDate && assignment.startDate > assignment.dueDate)) : !review.form.title.trim() || !review.form.subject.trim() || !review.form.dueDate || Boolean(review.form.startDate && review.form.dueDate && review.form.startDate > review.form.dueDate)} busy={busy || review.busy} onFieldChange={review.setField} onAddStartDate={review.toggleStartDate} onRemoveStartDate={review.removeStartDate} onSave={() => void addTask()} />
           <button className="sheet-close" onClick={() => setSheetOpen(false)} aria-label="닫기"><Cross2Icon /></button>
         </div>
       </BottomSheet>
@@ -1766,26 +2054,15 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [calendarSaveBusy, setCalendarSaveBusy] = useState(false);
-  const [title, setTitle] = useState("");
-  const [subject, setSubject] = useState("");
-  const [dueDate, setDueDate] = useState(todayInSeoul);
-  const [dueTime, setDueTime] = useState("18:00");
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [file, setFile] = useState<File | null>(null);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [selectedCandidate, setSelectedCandidate] = useState(0);
-  const [reviewedFields, setReviewedFields] = useState<ReviewedFields>({});
-  const [analysisWarnings, setAnalysisWarnings] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const openPhotoInput = (capture: boolean) => {
-    const input = photoInputRef.current;
-    if (!input) return;
-    if (capture) input.setAttribute("capture", "environment");
-    else input.removeAttribute("capture");
-    input.click();
+  const photoSelectionModeRef = useRef<"append" | "replace">("append");
+  const review = useExtractionReview(todayInSeoul());
+  const openPhotoInput = (replace = false) => {
+    photoSelectionModeRef.current = replace ? "replace" : "append";
+    photoInputRef.current?.click();
   };
   const calendar = useCalendar(tasks);
   const activeCount = tasks.filter((task) => !task.done).length;
@@ -1817,84 +2094,42 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
     return () => { mounted = false; };
   }, [calendar.year, calendar.month, online]);
 
-  const applyCandidate = (candidate: Candidate, index: number) => {
-    const extractedDueAt = candidateDueAt(candidate);
-    setSelectedCandidate(index);
-    setTitle(candidate.title || "");
-    setSubject(candidate.subject || "");
-    setDueDate(extractedDueAt?.date || "");
-    if (extractedDueAt) setDueTime(extractedDueAt.time);
-  };
-
-  const markFieldReviewed = (field: ReviewField, value: string) => {
-    if (!value.trim() || !candidates[selectedCandidate]) return;
-    const key = candidateReviewKey(candidates[selectedCandidate], selectedCandidate);
-    setReviewedFields((current) => current[key]?.includes(field) ? current : { ...current, [key]: [...(current[key] || []), field] });
-  };
-
-  const removeCandidate = (index: number) => {
-    const remaining = candidates.filter((_, candidateIndex) => candidateIndex !== index);
-    const nextIndex = index < selectedCandidate
-      ? selectedCandidate - 1
-      : Math.min(selectedCandidate, Math.max(remaining.length - 1, 0));
-    setCandidates(remaining);
-    setSelectedCandidate(remaining.length ? nextIndex : 0);
-    if (index === selectedCandidate && remaining.length) applyCandidate(remaining[nextIndex], nextIndex);
-    if (!remaining.length) {
-      setTitle("");
-      setSubject("");
-      setDueDate(calendar.selectedDate);
-      setDueTime("18:00");
-    }
-  };
-
-  const analyzePhoto = async (selectedFile: File) => {
-    setBusy(true);
-    setError("");
-    try {
-      const extraction = await extractAssignment(selectedFile);
-      const extractedCandidates = extractionCandidates(extraction);
-      const candidate = extractedCandidates[0];
-      if (!candidate) throw new Error("사진에서 과제를 찾지 못했습니다.");
-      setCandidates(extractedCandidates);
-      setReviewedFields({});
-      setAnalysisWarnings(extraction.warnings || []);
-      applyCandidate(candidate, 0);
-    } catch (analysisError) {
-      setError(apiErrorMessage(analysisError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const addTask = async () => {
-    if (!title.trim() || !subject.trim() || !dueDate) return;
+    const currentForm = review.form;
+    const selectedAssignments = review.assignments.filter((assignment) => assignment.selected);
+    if (review.assignments.length) {
+      if (!selectedAssignments.length) { setError("저장할 과제를 선택해 주세요."); return; }
+      if (selectedAssignments.some((assignment) => !assignment.title?.trim() || !assignment.subject?.trim() || !assignment.dueDate || Boolean(assignment.startDate && assignment.dueDate && assignment.startDate > assignment.dueDate))) {
+        setError("선택한 과제의 제목, 과목, 마감일과 기간을 확인해 주세요.");
+        return;
+      }
+    } else if (!currentForm.title.trim() || !currentForm.subject.trim() || !currentForm.dueDate || Boolean(currentForm.startDate && currentForm.dueDate && currentForm.startDate > currentForm.dueDate)) return;
     setBusy(true);
     setError("");
     try {
-      const created = await createAssignment(title.trim(), subject, dueAt(dueDate, dueTime), notificationsEnabled);
-      const createdTask = taskFromAssignment(created);
-      setTasks((current) => [...current, createdTask]);
-      calendar.selectDate(createdTask.date);
-      if (candidates.length) {
-        const remaining = candidates.filter((_, candidateIndex) => candidateIndex !== selectedCandidate);
-        const nextIndex = Math.min(selectedCandidate, Math.max(remaining.length - 1, 0));
-        setCandidates(remaining);
-        setSelectedCandidate(remaining.length ? nextIndex : 0);
-        if (remaining.length) {
-          applyCandidate(remaining[nextIndex], nextIndex);
-        } else {
-          setTitle("");
-          setSubject("");
-          setDueDate(calendar.selectedDate);
-          setDueTime("18:00");
-        }
+      if (review.assignments.length) {
+        const created = await createAssignmentsBatch(review.extractionBatchId, selectedAssignments.map((assignment) => ({
+          clientAssignmentId: assignment.clientAssignmentId,
+          sourceImageId: assignment.sourceImageId,
+          title: assignment.title!.trim(),
+          subject: assignment.subject!.trim(),
+          startDate: assignment.startDate,
+          dueDate: assignment.dueDate!,
+          dueTime: assignment.dueTime,
+          reminderEnabled: assignment.reminderEnabled,
+        })));
+        setTasks((current) => [...current, ...created.map(taskFromAssignment)]);
+        const lastCreated = created.at(-1);
+        if (lastCreated) calendar.selectDate(taskFromAssignment(lastCreated).date);
+        const remaining = review.assignments.filter((assignment) => !assignment.selected);
+        review.removeSavedAssignments(selectedAssignments.map((assignment) => assignment.clientAssignmentId));
+        if (!remaining.length) setAddOpen(false);
       } else {
-        setTitle("");
-        setFile(null);
-        setNotificationsEnabled(true);
-        setCandidates([]);
-        setAnalysisWarnings([]);
+        const created = await createAssignment(currentForm.title.trim(), currentForm.subject.trim(), dueAt(currentForm.dueDate, currentForm.dueTime || "23:59"), currentForm.reminderEnabled, currentForm.startDate || null);
+        const createdTask = taskFromAssignment(created);
+        setTasks((current) => [...current, createdTask]);
+        calendar.selectDate(createdTask.date);
+        review.resetManual(calendar.selectedDate);
         setAddOpen(false);
       }
     } catch (saveError) {
@@ -1953,7 +2188,7 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         <button className="tablet-account" onClick={() => setMyPageOpen(true)}><PersonIcon />마이페이지</button>
       </aside>
       <section className="tablet-content">
-        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button>{!editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? <button className="tablet-photo" onClick={() => { setDueDate(calendar.selectedDate); setAddOpen(true); }}><PlusIcon />과제 추가</button> : null}</div></header>
+        <header className="tablet-topbar"><div><p className="section-label">{view === "calendar" ? "월간 달력" : todayLabel()}</p><h1>{view === "calendar" ? "이번 달 과제를 한눈에 확인하세요." : "오늘도 하나씩 끝내볼까요?"}</h1></div><div><OfflineBadge online={online} /><NotificationBell /><ThemeButton /><button className="icon-button" onClick={() => setCalendarSaveOpen(true)} aria-label="배경화면으로 저장"><DownloadIcon /></button>{!editingTask && !calendarSaveOpen && !myPageOpen && !deleteAccountOpen ? <button className="tablet-photo" onClick={() => { review.resetManual(calendar.selectedDate); setAddOpen(true); }}><PlusIcon />과제 추가</button> : null}</div></header>
         {view === "dashboard" ? (
           <div className="tablet-grid">
             <div className="tablet-left">
@@ -1969,15 +2204,12 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
       </section>
-      <input ref={photoInputRef} hidden type="file" accept="image/*" onChange={(event) => {
-        const selectedFile = event.currentTarget.files?.[0];
+      <input ref={photoInputRef} hidden type="file" accept="image/*" multiple onChange={(event) => {
+        const selectedFiles = Array.from(event.currentTarget.files ?? []);
         event.currentTarget.value = "";
-        if (!selectedFile) return;
-        setFile(selectedFile);
-        setCandidates([]);
-        setReviewedFields({});
-        setAnalysisWarnings([]);
-        setDueDate(calendar.selectedDate);
+        if (!selectedFiles.length) return;
+        const result = photoSelectionModeRef.current === "replace" ? review.replaceFiles(selectedFiles) : review.addFiles(selectedFiles);
+        if (result.duplicateCount) setError("이미 추가된 사진은 제외했어요.");
         setAddOpen(true);
       }} />
       <AnimatePresence>
@@ -1987,18 +2219,11 @@ function TabletDashboard({ onLogout }: { onLogout: () => void }) {
         {addOpen ? (
           <TabletModal key="add-assignment" label="새 과제 추가">
             <header><div><p className="section-label">빠른 추가</p><h2>새 과제 추가</h2></div><button onClick={() => setAddOpen(false)} aria-label="닫기"><Cross2Icon /></button></header>
-            <PhotoPicker file={file} onRequestSelect={() => openPhotoInput(false)} onRequestCamera={() => openPhotoInput(true)} />
-            {file ? <button type="button" className="analyze-button" onClick={() => void analyzePhoto(file)} disabled={busy}>{busy ? "분석 중..." : "사진 분석"}</button> : null}
-            <AnalysisReview candidates={candidates} selected={selectedCandidate} warnings={analysisWarnings} reviewRequired={unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).length > 0} onSelect={applyCandidate} onDelete={removeCandidate} />
+            <PhotoPicker images={review.images} onRequestSelect={openPhotoInput} onRemove={review.removeImage} onRetry={(imageId) => void review.analyzeImages([imageId])} busy={busy || review.busy} />
+            {review.pendingImageCount ? <button type="button" className="analyze-button" onClick={() => void review.analyzeImages()} disabled={busy || review.busy}>{review.busy ? "분석 중..." : `사진 분석 (${review.pendingImageCount}장)`}</button> : null}
+            <AnalysisReview images={review.images} assignments={review.assignments} selectedId={review.selectedAssignmentId} warnings={review.warnings} reviewRequired={review.reviewRequired} onSelect={review.selectAssignment} onToggle={review.toggleAssignment} onToggleAll={review.toggleAllAssignments} onDelete={review.removeAssignment} />
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
-            <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("title") ? "review-needed" : ""}`}><span>과제명</span><input value={title} onChange={(event) => { setTitle(event.target.value); markFieldReviewed("title", event.target.value); }} placeholder="과제명을 입력하세요" /></label>
-            <div className="form-row">
-              <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("subject") ? "review-needed" : ""}`}><span>과목</span><input value={subject} onChange={(event) => { setSubject(event.target.value); markFieldReviewed("subject", event.target.value); }} placeholder="과목 또는 분류를 입력하세요" /></label>
-              <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("dueDate") ? "review-needed" : ""}`}><span>마감일</span><input type="date" value={dueDate} onChange={(event) => { setDueDate(event.target.value); markFieldReviewed("dueDate", event.target.value); }} /></label>
-            </div>
-            <label className={`form-field ${unreviewedCandidateFields(candidates[selectedCandidate], selectedCandidate, reviewedFields).includes("dueTime") ? "review-needed" : ""}`}><span>마감 시간</span><input type="time" value={dueTime} onChange={(event) => { setDueTime(event.target.value); markFieldReviewed("dueTime", event.target.value); }} /></label>
-            <label className="alarm-toggle"><input type="checkbox" checked={notificationsEnabled} onChange={(event) => setNotificationsEnabled(event.target.checked)} /><BellIcon />마감 알림 받기</label>
-            <button className="save-button" onClick={() => void addTask()} disabled={!title.trim() || !subject.trim() || !dueDate || busy}>{busy ? "처리 중..." : "과제 저장"}</button>
+            <AssignmentReviewForm form={review.form} reviewRequiredFields={review.reviewRequiredFields} isStartDateExpanded={review.isStartDateExpanded} saveLabel={review.assignments.length ? `선택한 ${review.selectedCount}개 과제 저장` : "과제 저장"} saveDisabled={busy || review.busy || review.assignments.length ? review.selectedCount === 0 || review.assignments.filter((assignment) => assignment.selected).some((assignment) => !assignment.title?.trim() || !assignment.subject?.trim() || !assignment.dueDate || Boolean(assignment.startDate && assignment.dueDate && assignment.startDate > assignment.dueDate)) : !review.form.title.trim() || !review.form.subject.trim() || !review.form.dueDate || Boolean(review.form.startDate && review.form.dueDate && review.form.startDate > review.form.dueDate)} busy={busy || review.busy} onFieldChange={review.setField} onAddStartDate={review.toggleStartDate} onRemoveStartDate={review.removeStartDate} onSave={() => void addTask()} />
           </TabletModal>
         ) : null}
         {editingTask ? (
