@@ -785,15 +785,12 @@ button {
 }
 
 .photo-field {
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 86px;
-  height: auto;
-  padding: 8px;
+  height: 86px;
   border: 1px dashed #4a4e52;
   border-radius: 14px;
   color: #a8abad;
@@ -811,13 +808,13 @@ button {
 
 .photo-picker-trigger {
   display: flex;
-  flex: none;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: 60px;
+  min-height: 0;
   padding: 0;
   border: 0;
   color: inherit;
@@ -836,88 +833,6 @@ button {
 .photo-picker-trigger small {
   color: var(--muted);
   font-size: 9px;
-}
-
-.photo-reselect {
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--muted);
-  background: var(--surface-soft);
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.selected-image-list {
-  display: grid;
-  gap: 6px;
-  width: 100%;
-}
-
-.selected-image {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding: 5px;
-  border-radius: 9px;
-  background: var(--surface-soft);
-}
-
-.selected-image img {
-  width: 38px;
-  height: 38px;
-  object-fit: cover;
-  border-radius: 6px;
-}
-
-.selected-image-meta {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.selected-image-meta strong,
-.selected-image-meta small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.selected-image-meta strong {
-  color: var(--ink);
-  font-size: 10px;
-}
-
-.selected-image-meta small {
-  color: var(--muted);
-  font-size: 9px;
-}
-
-.image-retry,
-.image-delete {
-  display: grid;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  min-height: 28px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--ink);
-  background: var(--surface-soft);
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.image-delete {
-  padding: 0;
-}
-
-.image-delete svg {
-  width: 13px;
-  height: 13px;
 }
 
 .analyze-button {
@@ -941,22 +856,6 @@ button {
   margin: 0;
 }
 
-.analysis-progress {
-  color: var(--muted);
-}
-
-.candidate-select-all {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--ink);
-  font-size: 10px;
-}
-
-.candidate-select-all input {
-  accent-color: var(--accent);
-}
-
 .candidate-list {
   display: flex;
   gap: 6px;
@@ -966,45 +865,18 @@ button {
 .candidate-item {
   display: flex;
   flex: 0 0 auto;
-  align-items: stretch;
   min-width: 0;
   max-width: min(100%, 420px);
 }
 
-.candidate-select {
-  width: 16px;
-  min-width: 16px;
-  margin: 0 5px 0 2px;
-  accent-color: var(--accent);
-}
-
 .candidate-list .candidate-option {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
   flex: 0 0 auto;
-  min-width: 0;
-  max-width: 100%;
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 9px;
   color: var(--muted);
   background: var(--surface-soft);
   font-size: 10px;
-}
-
-.candidate-list .candidate-option span,
-.candidate-list .candidate-option small {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.candidate-list .candidate-option small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 9px;
 }
 
 .candidate-list .candidate-option.active,
@@ -2401,9 +2273,19 @@ button {
     overflow: visible;
   }
 
+  .candidate-list .candidate-option {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    padding: 9px 11px;
+    text-align: left;
+    line-height: 1.4;
+  }
+
   .candidate-item {
     display: grid;
-    grid-template-columns: 22px minmax(0, 1fr) 36px;
+    grid-template-columns: minmax(0, 1fr) 36px;
     width: 100%;
     max-width: none;
   }
@@ -2416,19 +2298,6 @@ button {
     padding: 9px 11px;
     text-align: left;
     line-height: 1.4;
-  }
-
-  .candidate-list .candidate-option span,
-  .candidate-list .candidate-option small {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .candidate-select {
-    align-self: center;
-    margin: 0 4px 0 1px;
   }
 
   .candidate-list .candidate-delete {
