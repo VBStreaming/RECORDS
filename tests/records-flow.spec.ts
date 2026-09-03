@@ -439,7 +439,7 @@ test("photo analysis requires an explicit action and supports candidate review",
   await expect(page.locator('input[type="file"][accept="image/*"]')).toHaveCount(1);
 });
 
-test("assignment share links can be created and added from the shared page", async ({ page }) => {
+test("assignment share links open a prefilled registration form without saving", async ({ page }) => {
   const sharedAssignment = {
     id: "assignment-1",
     title: "공유 수학 과제",
@@ -453,6 +453,7 @@ test("assignment share links can be created and added from the shared page", asy
     deadlineLabel: "D-Day",
     startDate: null,
   };
+  let createRequests = 0;
   await page.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -460,19 +461,16 @@ test("assignment share links can be created and added from the shared page", asy
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { id: "user-1", name: "테스트", email: "test@example.com", studentNumber: "20514" } }) });
       return;
     }
-    if (url.pathname === "/assignments" && request.method() === "GET") {
+    if (url.pathname === "/assignments" && request.method() === "GET" && request.resourceType() !== "document") {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: [sharedAssignment] }) });
       return;
     }
     if (url.pathname === "/assignments/assignment-1/share" && request.method() === "POST") {
-      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: { token: "share-token", expiresAt: "2030-10-01T00:00:00Z" } }) });
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ success: false }) });
       return;
     }
-    if (url.pathname === "/shared-assignments/share-token" && request.method() === "GET") {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, data: { ...sharedAssignment, expiresAt: "2030-10-01T00:00:00Z" } }) });
-      return;
-    }
-    if (url.pathname === "/shared-assignments/share-token/add" && request.method() === "POST") {
+    if (url.pathname === "/assignments" && request.method() === "POST") {
+      createRequests += 1;
       await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: sharedAssignment }) });
       return;
     }
@@ -488,11 +486,18 @@ test("assignment share links can be created and added from the shared page", asy
   await page.goto("/?screen=dashboard&theme=light");
   await page.getByRole("button", { name: "공유 수학 과제 수정" }).click();
   await page.getByRole("button", { name: "공유 링크 만들기" }).click();
-  await expect(page.getByRole("textbox", { name: "과제 공유 링크" })).toHaveValue(/\/shared-assignments\/share-token$/);
-  await page.goto("/shared-assignments/share-token");
-  await expect(page.getByRole("heading", { name: "공유 수학 과제" })).toBeVisible();
-  await page.getByRole("button", { name: "내 과제에 추가" }).click();
-  await expect(page.getByText("내 과제에 추가했어요.", { exact: true })).toBeVisible();
+  const link = await page.getByRole("textbox", { name: "과제 공유 링크" }).inputValue();
+  const sharedUrl = new URL(link);
+  expect(sharedUrl.pathname).toBe("/assignments");
+  expect(sharedUrl.searchParams.get("share")).toBe("1");
+  expect(sharedUrl.searchParams.get("title")).toBe("공유 수학 과제");
+  expect(sharedUrl.searchParams.get("subject")).toBe("수학");
+  await page.goto(`${sharedUrl.pathname}${sharedUrl.search}`);
+  await expect(page).toHaveURL(/\/\?share=1&.*screen=dashboard|\/\?screen=dashboard&.*share=1/);
+  await expect(page.getByRole("dialog", { name: "새 과제 추가" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "과제명" })).toHaveValue("공유 수학 과제");
+  await expect(page.getByRole("textbox", { name: "과목" })).toHaveValue("수학");
+  expect(createRequests).toBe(0);
 });
 
 test("expired access token redirects to login on tablet and mobile", async ({ page }) => {

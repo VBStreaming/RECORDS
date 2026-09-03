@@ -458,10 +458,6 @@ export async function createAssignment(title: string, subject: string, dueAt: st
   return assignment;
 }
 
-export function createAssignmentShare(id: string) {
-  return request<{ token: string; expiresAt: string }>(`/assignments/${id}/share`, { method: "POST" });
-}
-
 export function getSharedAssignment(token: string) {
   return request<SharedAssignment>(`/shared-assignments/${encodeURIComponent(token)}`);
 }
