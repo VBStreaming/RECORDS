@@ -175,13 +175,10 @@ test("responsive signup, calendar, task edit and dashboard flows work", async ({
   await page.getByRole("button", { name: "대시보드" }).click();
   await chooseAssignmentPhoto(page);
   const modalLayout = await page.evaluate(() => {
-    const sidebar = document.querySelector(".tablet-sidebar")!.getBoundingClientRect();
-    const content = document.querySelector(".tablet-content")!.getBoundingClientRect();
     const modal = document.querySelector(".tablet-modal")!.getBoundingClientRect();
-    return { sidebarRight: sidebar.right, modalLeft: modal.left, modalCenter: modal.left + modal.width / 2, contentCenter: content.left + content.width / 2 };
+    return { modalCenter: modal.left + modal.width / 2, viewportCenter: window.innerWidth / 2 };
   });
-  expect(modalLayout.modalLeft).toBeGreaterThanOrEqual(modalLayout.sidebarRight);
-  expect(Math.abs(modalLayout.modalCenter - modalLayout.contentCenter)).toBeLessThan(1);
+  expect(Math.abs(modalLayout.modalCenter - modalLayout.viewportCenter)).toBeLessThan(1);
   const fieldLayout = await page.evaluate(() => {
     const modal = document.querySelector(".tablet-modal")!.getBoundingClientRect();
     const padding = Number.parseFloat(getComputedStyle(document.querySelector(".tablet-modal")!).paddingLeft);

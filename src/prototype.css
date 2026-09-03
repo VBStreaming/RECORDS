@@ -1802,14 +1802,13 @@ button {
   position: fixed;
   z-index: 50;
   inset: 0;
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(0, 0, 0, .58);
 }
 
 .tablet-modal {
-  grid-column: 2;
   display: grid;
   gap: 16px;
   width: min(460px, calc(100vw - 48px));
@@ -2061,7 +2060,6 @@ button {
 @media (max-width: 1100px) {
   .tablet-dashboard { grid-template-columns: 190px minmax(0, 1fr); }
   .tablet-content { padding: 30px 28px; }
-  .tablet-modal-overlay { grid-template-columns: 190px minmax(0, 1fr); }
 }
 
 @media (max-width: 900px) and (min-width: 701px) {
@@ -2104,14 +2102,6 @@ button {
     max-height: min(70vh, 520px);
     overflow-y: auto;
     transform-origin: top right;
-  }
-
-  .tablet-modal-overlay {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .tablet-modal {
-    grid-column: 1;
   }
 
   .phone-stage {
