@@ -490,8 +490,9 @@ test("assignment share links open a prefilled registration form without saving",
   const sharedUrl = new URL(link);
   expect(sharedUrl.pathname).toBe("/assignments");
   expect(sharedUrl.searchParams.get("share")).toBe("1");
-  expect(sharedUrl.searchParams.get("title")).toBe("공유 수학 과제");
-  expect(sharedUrl.searchParams.get("subject")).toBe("수학");
+  expect(sharedUrl.searchParams.get("t")).toBe("공유 수학 과제");
+  expect(sharedUrl.searchParams.get("s")).toBe("수학");
+  expect(sharedUrl.searchParams.get("title")).toBeNull();
   await page.goto(`${sharedUrl.pathname}${sharedUrl.search}`);
   await expect(page).toHaveURL(/\/\?share=1&.*screen=dashboard|\/\?screen=dashboard&.*share=1/);
   await expect(page.getByRole("dialog", { name: "새 과제 추가" })).toBeVisible();

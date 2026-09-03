@@ -210,22 +210,23 @@ function completeAuth(onSuccess: () => void) {
 function assignmentShareDraftFromLocation(): AssignmentShareDraft | null {
   const params = new URLSearchParams(window.location.search);
   if (params.get("share") !== "1") return null;
-  const title = params.get("title")?.trim() || "";
-  const subject = params.get("subject")?.trim() || "";
-  const dueDate = params.get("dueDate") || "";
-  const dueTime = params.get("dueTime") || "";
+  const title = params.get("t")?.trim() || params.get("title")?.trim() || "";
+  const subject = params.get("s")?.trim() || params.get("subject")?.trim() || "";
+  const dueDate = params.get("d") || params.get("dueDate") || "";
+  const dueTime = params.get("tm") || params.get("dueTime") || "";
+  const notifications = params.get("n") ?? params.get("notifications");
   if (!title || !subject || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || (dueTime && !/^\d{2}:\d{2}$/.test(dueTime))) return null;
-  return { title, subject, dueDate, dueTime, notificationsEnabled: params.get("notifications") !== "0" };
+  return { title, subject, dueDate, dueTime, notificationsEnabled: notifications !== "0" };
 }
 
 function assignmentShareUrl(task: Task) {
   const params = new URLSearchParams({
     share: "1",
-    title: task.title.trim(),
-    subject: task.subject.trim(),
-    dueDate: task.date,
-    dueTime: task.time,
-    notifications: task.notificationsEnabled ? "1" : "0",
+    t: task.title.trim(),
+    s: task.subject.trim(),
+    d: task.date,
+    tm: task.time,
+    n: task.notificationsEnabled ? "1" : "0",
   });
   return `${window.location.origin}/assignments?${params.toString()}`;
 }
