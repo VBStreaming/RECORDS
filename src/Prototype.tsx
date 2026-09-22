@@ -559,6 +559,7 @@ function NotificationBell() {
   const [preference, setPreference] = useState<NotificationPreferences["beforeDeadlineMinutes"]>(60);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   const [pushError, setPushError] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
   const loaded = useRef(false);
   const seen = useRef(new Set<string>());
   const reduceMotion = useReducedMotion();
@@ -595,6 +596,15 @@ function NotificationBell() {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [open]);
+
   const enableBrowserNotifications = async () => {
     if (!("Notification" in window) || !window.isSecureContext) return;
     try {
@@ -626,7 +636,7 @@ function NotificationBell() {
   };
 
   return (
-    <div className="notification-menu">
+    <div ref={menuRef} className="notification-menu">
       <button
         className="icon-button notification-button"
         onClick={() => {
